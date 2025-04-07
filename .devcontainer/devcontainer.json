@@ -21,7 +21,9 @@
         "njpwerner.autodocstring",
         "saoudrizwan.claude-dev",
         "kurusugawa-computer.markdown-copilot",
-        "eamodio.gitlens"
+        "eamodio.gitlens",
+        "sms-vscode.makefile-tools",
+        "ms-azuretools.vscode-docker"
       ],
       "settings": {
         "python.defaultInterpreterPath": ".venv/bin/python",
@@ -29,7 +31,7 @@
         "editor.formatOnSave": true,
         "python.formatting.provider": "ruff",
         "editor.codeActionsOnSave": {
-          "source.organizeImports": true
+          "source.organizeImports": "always"
         }
       }
     }
