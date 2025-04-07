@@ -23,6 +23,9 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
   language-pack-ja \
   && apt-get clean && rm -rf /var/lib/apt/lists/*
 
+ENV LANG=ja_JP.UTF-8
+ENV LANGUAGE=ja_JP:ja
+
 RUN echo "ubuntu:ubuntu" | chpasswd && \
   usermod -aG sudo ubuntu && \
   echo "ubuntu ALL=(ALL) NOPASSWD: ALL" >> /etc/sudoers
