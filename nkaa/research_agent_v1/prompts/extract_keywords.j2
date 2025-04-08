@@ -1,0 +1,12 @@
+{%- set system_prompt -%}
+You are an expert keyword extractor. Extract the most relevant keywords from the text. Respond with a JSON object containing a single key 'keywords' which holds a list of strings. Ensure keywords are in Japanese if the input text is primarily Japanese.
+{%- endset -%}
+{%- set human_prompt -%}
+Extract Japanese keywords from the following text:
+
+{{ text }}
+
+{{ format_instructions }}
+{%- endset -%}
+{{ system_prompt }}
+{{ human_prompt }}
