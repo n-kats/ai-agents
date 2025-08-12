@@ -1,30 +1,24 @@
 #!/usr/bin/env python3
 """
-graph.py – エージェントの全体構造および依存関係グラフを定義するモジュールである。
-本実装はdocs/plan/research_agent_v1.mdおよびdocs/meta_plan/makefile_policy.mdなどの各種ドキュメントに沿って実装される。
-langgraphライブラリを利用してグラフの構築を行う。
-
-注意: 本ファイルの内容は.clinerulesに準拠している。また、開発者向けのコメントは「である調」を用いる。
+graph.py – research_agent_v1 のグラフ構造と状態遷移を定義する。
+langgraph ライブラリを利用してグラフを構築する。
 """
 
 import logging
 from datetime import datetime
-
-# 状態を定義するためのTypedDict（必要に応じて）
 from typing import Any, Dict, TypedDict
 
 from langgraph.graph import END, StateGraph
 
-# research_agent_v1.nodesから必要なクラスをインポート
-from .nodes import (
+from nkaa.research_agent_v1.nodes import (
     AnalysisSynthesisAgent,
     DataGatheringAgent,
     FinalCheckAgent,
-    ReplanAgent,  # ReplanAgent を追加
+    ReplanAgent,
 )
 
 
-# グラフの状態を定義
+# グラフ全体で共有される状態を定義する
 class AgentState(TypedDict):
     query: str
     options: Dict[str, Any]
@@ -34,67 +28,69 @@ class AgentState(TypedDict):
     final_results: Dict[str, Any] | None
     final_check_results: Dict[str, Any] | None
     error: str | None
-    # --- 再試行関連 ---
-    retry_count: int  # 現在の再試行回数
-    max_retries: int  # 最大再試行回数
-    refined_query: str | None  # 再計画されたクエリ
+    # 再試行制御用の状態
+    retry_count: int
+    max_retries: int
+    refined_query: str | None
 
 
 # --- ノード関数 ---
-# 各エージェントのrunメソッドはAgentStateを受け取り、更新部分を返す必要がある。
-# nodes.pyのrunメソッドのシグネチャと戻り値を調整する必要がある。
-# ここでは、ラッパー関数を使うか、nodes.py側を修正することを想定する。
+# 各ノード関数は AgentState を受け取り、状態の更新部分を含む辞書を返す。
+# 実際の処理は nodes.py 内の各 Agent クラスに委譲する。
+# このラッパー関数群は、Agent クラスのインターフェース (input_data を受け取る) と
+# StateGraph が要求するインターフェース (AgentState を受け取る) の差異を吸収する役割を持つ。
 
 
 def gather_data_node(state: AgentState) -> Dict[str, Any]:
-    """データ収集ノードを実行するラッパー関数"""
+    """データ収集ノード: クエリに基づいて情報を収集する。"""
     logging.debug("--- Running Data Gathering Node ---")
-    agent = DataGatheringAgent()  # インスタンス化（DIも検討可能）
+    # DIコンテナ等を使わず直接インスタンス化しているが、将来的に変更する可能性はある
+    agent = DataGatheringAgent()
     try:
-        # refined_query があればそちらを優先、なければ元の query を使用
+        # 再計画されたクエリ (refined_query) があれば、それを優先して使用する
         query_to_use = state.get("refined_query") or state["query"]
-        logging.info(
-            f"Using query for data gathering: '{query_to_use}'"
-        )  # 使用するクエリをログ出力
-        # nodes.pyのrunメソッドはinput_data辞書を受け取る想定なので合わせる
-        # input_data には query_to_use を渡す
+        logging.info(f"Using query for data gathering: '{query_to_use}'")
+        # DataGatheringAgent は input_data 形式の入力を期待するため、それに合わせる
         input_data = {"query": query_to_use, "options": state["options"]}
-        # nodes.pyのrunメソッドの戻り値が {'results': ..., 'state': ..., 'error': ...} の形式と仮定
-        # agent.run には input_data を渡す (nodes.py側で refined_query を見る必要はない)
+        # DataGatheringAgent.run の戻り値は {'results': ..., 'error': ...} を想定
         output = agent.run(input_data)
         if output.get("error"):
             logging.error(f"Data gathering failed: {output['error']}")
+            # エラー発生時は error のみを返す (他の状態は更新しない)
             return {"error": output["error"]}
-        logging.debug(f"Data gathering results: {output.get('results')}")
-        return {"data_gathering_results": output.get("results")}
+        logging.debug(f"Data gathering results: {output.get('data_gathering_results')}")
+        # 成功時は data_gathering_results を更新する辞書を返す
+        return {"data_gathering_results": output.get("data_gathering_results")}
     except Exception as e:
         logging.exception("Exception during data gathering")
         return {"error": f"Data gathering exception: {e}"}
 
 
 def analyze_synthesize_node(state: AgentState) -> Dict[str, Any]:
-    """分析・統合ノードを実行するラッパー関数"""
+    """分析・統合ノード: 収集されたデータを分析し、結果を統合する。"""
     logging.debug("--- Running Analysis & Synthesis Node ---")
-    if state.get("error"):  # 前のステップでエラーがあればスキップ
+    # 前のステップでエラーが発生していれば、このノードは実行せずに状態を維持する
+    if state.get("error"):
         return {}
     if not state.get("data_gathering_results"):
         logging.warning("No data gathering results found for analysis.")
         return {"error": "Missing data gathering results"}
 
-    agent = AnalysisSynthesisAgent()  # インスタンス化
+    agent = AnalysisSynthesisAgent()
     try:
-        # nodes.pyのrunメソッドはinput_data辞書を受け取る想定
+        # AnalysisSynthesisAgent は input_data 形式の入力を期待
         input_data = {"results": state["data_gathering_results"]}
-        # nodes.pyのrunメソッドの戻り値が {'analysis': ..., 'synthesis': ..., 'state': ..., 'error': ...} と仮定
+        # AnalysisSynthesisAgent.run の戻り値は {'analysis': ..., 'synthesis': ..., 'error': ...} を想定
         output = agent.run(input_data)
         if output.get("error"):
             logging.error(f"Analysis/Synthesis failed: {output['error']}")
             return {"error": output["error"]}
-        logging.debug(f"Analysis results: {output.get('analysis')}")
-        logging.debug(f"Synthesis results: {output.get('synthesis')}")
+        logging.debug(f"Analysis results: {output.get('analysis_results')}")
+        logging.debug(f"Synthesis results: {output.get('synthesis_results')}")
+        # 成功時は analysis_results と synthesis_results を更新する辞書を返す
         return {
-            "analysis_results": output.get("analysis"),
-            "synthesis_results": output.get("synthesis"),
+            "analysis_results": output.get("analysis_results"),
+            "synthesis_results": output.get("synthesis_results"),
         }
     except Exception as e:
         logging.exception("Exception during analysis/synthesis")
@@ -102,9 +98,10 @@ def analyze_synthesize_node(state: AgentState) -> Dict[str, Any]:
 
 
 def organize_results_node(state: AgentState) -> Dict[str, Any]:
-    """最終結果を整理するノード"""
+    """最終結果整理ノード: ワークフローの最終結果を整形する。"""
     logging.debug("--- Running Organize Results Node ---")
-    if state.get("error"):  # エラーがあれば最終結果にも反映
+    # 途中でエラーが発生していた場合、エラー情報を含む最終結果を生成する
+    if state.get("error"):
         return {
             "final_results": {
                 "status": "error",
@@ -113,7 +110,7 @@ def organize_results_node(state: AgentState) -> Dict[str, Any]:
             }
         }
 
-    # 正常終了時の結果整理
+    # 正常終了時の最終結果を生成する
     final_results = {
         "query": state.get("query"),
         "options": state.get("options"),
@@ -124,58 +121,57 @@ def organize_results_node(state: AgentState) -> Dict[str, Any]:
         "timestamp": datetime.now().isoformat(),
     }
     logging.debug(f"Final organized results: {final_results}")
-    # final_results を返しつつ、エラー状態はクリアしない
-    return {"final_results": final_results, "error": state.get("error")}
+    # final_results を更新する辞書を返す (既存のエラー状態は維持される)
+    return {"final_results": final_results}
 
 
 def final_check_node(state: AgentState) -> Dict[str, Any]:
-    """最終チェックノードを実行するラッパー関数"""
+    """最終チェックノード: 生成された結果がクエリの意図に適合するか評価する。"""
     logging.debug("--- Running Final Check Node ---")
-    if state.get("error"):  # 前のステップでエラーがあればスキップ
-        # エラーがある場合、チェック結果は更新せず、既存のエラーを維持
-        return {"error": state.get("error")}
-    if (
-        not state.get("final_results")
-        or state["final_results"].get("status") == "error"
-    ):
+    # 前のステップでエラーが発生していればスキップ
+    if state.get("error"):
+        return {}
+    # 最終結果が存在しない、またはエラー状態の場合はスキップ
+    final_results = state.get("final_results")
+    if not final_results or final_results.get("status") == "error":
         logging.warning(
             "Skipping final check due to missing or error state in final_results."
         )
-        # final_results にエラーがある場合はそれを維持
+        # 既存のエラー状態を維持、なければエラーを設定
         return {"error": state.get("error") or "Missing or error in final_results"}
 
     agent = FinalCheckAgent()
     try:
-        # nodes.py の FinalCheckAgent.run は input_data を受け取る
-        # 必要な情報を渡す
+        # FinalCheckAgent は input_data 形式の入力を期待
         input_data = {
             "query": state["query"],
             "synthesis_results": state["synthesis_results"],
             # final_results も渡して、synthesis がない場合のエラーハンドリングに使う
             "final_results": state["final_results"],
         }
-        # nodes.py の run の戻り値は {"final_check_results": ...} または {"check_error": ..., "final_check_results": ...}
+        # FinalCheckAgent.run の戻り値は {"final_check_results": ..., "check_error": ...} を想定
         output = agent.run(input_data)
 
-        # エラーがあれば state['error'] に設定
+        # チェックでエラーが発生した場合 (FinalCheckAgent.run は 'check_error' キーでエラーを返す)
         if output.get("check_error"):
             logging.error(f"Final check failed: {output['check_error']}")
-            # 既存のエラーがあればそれに追記、なければ新規設定
+            # 既存のエラーがあれば追記、なければ新規設定
             current_error = state.get("error")
             new_error = f"Final Check Error: {output['check_error']}"
             combined_error = (
                 f"{current_error}; {new_error}" if current_error else new_error
             )
+            # final_check_results と更新された error を返す
             return {
                 "final_check_results": output.get("final_check_results"),
                 "error": combined_error,
             }
         else:
-            # 成功時はチェック結果のみ返す (エラーは None のまま)
+            # チェック成功時は final_check_results を更新し、エラーをクリアする
             return {
                 "final_check_results": output.get("final_check_results"),
                 "error": None,
-            }  # 成功時はエラーをクリア
+            }
 
     except Exception as e:
         logging.exception("Exception during final check")
@@ -186,27 +182,26 @@ def final_check_node(state: AgentState) -> Dict[str, Any]:
 
 
 def replan_node(state: AgentState) -> Dict[str, Any]:
-    """クエリ再計画ノードを実行するラッパー関数"""
+    """クエリ再計画ノード: 最終チェックで不適合だった場合にクエリを修正する。"""
     logging.debug("--- Running Replan Node ---")
-    # エラーが発生している場合や、そもそもチェック結果がない場合はスキップ
+    # エラーが発生している場合や、チェック結果がない場合はスキップ
     if state.get("error") or not state.get("final_check_results"):
         logging.warning(
             "Skipping replan due to existing error or missing check results."
         )
-        # エラーを維持しつつ、再試行カウントは増やさないようにする
-        # (エラー処理は handle_error ノードに任せる)
+        # エラーを維持し、再試行カウントは増やさない (エラー処理は handle_error ノードに任せる)
         return {"error": state.get("error", "Missing final_check_results for replan")}
 
     agent = ReplanAgent()
     try:
-        # nodes.py の ReplanAgent.run は input_data を受け取る
+        # ReplanAgent は input_data 形式の入力を期待
         input_data = {
             "query": state["query"],
             "synthesis_results": state["synthesis_results"],
             "final_check_results": state["final_check_results"],
-            "retry_count": state["retry_count"],  # 現在のカウントを渡す
+            "retry_count": state["retry_count"],
         }
-        # nodes.py の run の戻り値は {"refined_query": ..., "retry_count": ..., "error": ...}
+        # ReplanAgent.run の戻り値は {"refined_query": ..., "retry_count": ..., "error": ...} を想定
         output = agent.run(input_data)
 
         if output.get("error"):
@@ -223,14 +218,14 @@ def replan_node(state: AgentState) -> Dict[str, Any]:
                 "retry_count": output.get("retry_count", state["retry_count"]),
             }
         else:
-            # 成功時は refined_query とインクリメントされた retry_count を返す
+            # 成功時は refined_query とインクリメントされた retry_count を返し、エラーをクリアする
             logging.info(
                 f"Replanning successful. New query: {output.get('refined_query')}"
             )
             return {
                 "refined_query": output.get("refined_query"),
                 "retry_count": output.get("retry_count"),
-                "error": None,  # 成功時はエラーをクリア
+                "error": None,
             }
 
     except Exception as e:
@@ -238,27 +233,28 @@ def replan_node(state: AgentState) -> Dict[str, Any]:
         error_msg = f"Replanning exception: {e}"
         current_error = state.get("error")
         combined_error = f"{current_error}; {error_msg}" if current_error else error_msg
-        # エラーが発生した場合も retry_count はインクリメントされている可能性があるためそのまま返す
+        # エラー発生時も retry_count はインクリメントされている可能性があるため、そのまま返す
         return {"error": combined_error, "retry_count": state.get("retry_count", 0)}
 
 
 def handle_error_node(state: AgentState) -> Dict[str, Any]:
-    """エラー処理ノード"""
+    """エラー処理ノード: ワークフロー中のエラーを集約し、最終結果に反映させる。"""
     logging.error(f"--- Handling Error: {state.get('error', 'Unknown error')} ---")
-    # 既にorganize_results_nodeでエラー時のfinal_resultsが設定されている場合もある
+    # organize_results_node で既にエラー時の final_results が設定されている場合もあるため、
+    # final_results が未設定の場合のみ、エラー情報を含む final_results を設定する。
     if not state.get("final_results"):
         state["final_results"] = {
             "status": "error",
             "message": state.get("error", "Unknown error during workflow"),
             "timestamp": datetime.now().isoformat(),
         }
-    # エラー状態をクリアしないように注意（ENDに遷移するため）
+    # このノードは END に遷移するため、エラー状態はクリアしない
     return {"final_results": state["final_results"]}
 
 
 # --- 条件付きエッジ用の関数 ---
 def should_continue(state: AgentState) -> str:
-    """エラー状態に基づいて次の遷移を決定する"""
+    """エラー状態に基づいて次の遷移先 ('continue' または 'handle_error') を決定する。"""
     if state.get("error"):
         logging.warning(
             f"Workflow error detected: {state['error']}. Routing to handle_error."
@@ -269,8 +265,8 @@ def should_continue(state: AgentState) -> str:
 
 
 def check_and_decide_next_step(state: AgentState) -> str:
-    """最終チェックの結果と再試行回数に基づいて次の遷移を決定する"""
-    # まずエラーがないか確認
+    """最終チェックの結果と再試行回数に基づいて次の遷移先 ('finish', 'replan', 'handle_error') を決定する。"""
+    # 先にエラーがないか確認
     if state.get("error"):
         logging.warning(
             f"Workflow error detected before final decision: {state['error']}. Routing to handle_error."
@@ -291,12 +287,12 @@ def check_and_decide_next_step(state: AgentState) -> str:
 
     if evaluation == "適合":
         logging.info("Final check passed. Ending workflow.")
-        return "finish"
+        return "finish"  # ワークフロー終了
     elif evaluation == "不適合" and retry_count < max_retries:
         logging.warning(
             f"Final check failed (Attempt {retry_count + 1}/{max_retries}). Replanning query."
         )
-        return "replan"
+        return "replan"  # 再計画ノードへ
     elif evaluation == "不適合":
         logging.error(
             f"Final check failed after {max_retries} retries. Ending workflow with failure."
@@ -305,10 +301,10 @@ def check_and_decide_next_step(state: AgentState) -> str:
         state["error"] = (
             f"Final check failed after {max_retries} retries. Reason: {final_check_results.get('reason', 'Unknown')}"
         )
-        return "handle_error"  # エラーハンドリングノードへ
-    else:  # evaluation が "スキップ" や "エラー" の場合など
+        return "handle_error"  # エラー処理ノードへ
+    else:  # evaluation が "スキップ" や予期せぬ値の場合
         logging.error(
-            f"Final check resulted in '{evaluation}'. Reason: {final_check_results.get('reason', 'Unknown')}. Routing to handle_error."
+            f"Final check resulted in unexpected status '{evaluation}'. Reason: {final_check_results.get('reason', 'Unknown')}. Routing to handle_error."
         )
         # 既にエラーがあるはずだが念のため設定
         if not state.get("error"):
@@ -320,77 +316,58 @@ def check_and_decide_next_step(state: AgentState) -> str:
 
 # --- グラフ構築関数 ---
 def build_agent_graph():
-    """
-    エージェントの依存関係グラフを構築する関数である。
-    StateGraphを使用して状態遷移を定義する。
-    """
+    """エージェントのワークフローグラフを構築する。"""
     graph = StateGraph(AgentState)
 
-    # ノードの追加
+    # ノードをグラフに追加
     graph.add_node("gather_data", gather_data_node)
     graph.add_node("analyze_synthesize", analyze_synthesize_node)
     graph.add_node("organize_results", organize_results_node)
     graph.add_node("final_check", final_check_node)
-    graph.add_node("replan", replan_node)  # replan ノードを追加
+    graph.add_node("replan", replan_node)
     graph.add_node("handle_error", handle_error_node)
 
-    # エントリーポイントの設定
+    # エントリーポイントを設定
     graph.set_entry_point("gather_data")
 
-    # エッジの追加
-    # 通常フロー: gather_data -> analyze_synthesize -> organize_results -> END
-    # エラーフロー: * --(error)--> handle_error -> END
+    # 通常フローとエラーハンドリングのエッジを設定
+    # 各ステップ後に should_continue でエラーチェックを行い、エラーがあれば handle_error へ分岐する
 
-    # gather_data の後の遷移
     graph.add_conditional_edges(
         "gather_data",
         should_continue,
-        {
-            "continue": "analyze_synthesize",
-            "handle_error": "handle_error",
-        },
+        {"continue": "analyze_synthesize", "handle_error": "handle_error"},
     )
-
-    # analyze_synthesize の後の遷移
     graph.add_conditional_edges(
         "analyze_synthesize",
         should_continue,
-        {
-            "continue": "organize_results",
-            "handle_error": "handle_error",
-        },
+        {"continue": "organize_results", "handle_error": "handle_error"},
     )
-
-    # organize_results から final_check へ遷移
     graph.add_conditional_edges(
         "organize_results",
-        should_continue,  # organize_results でエラーが発生する可能性も考慮
-        {
-            "continue": "final_check",
-            "handle_error": "handle_error",
-        },
+        should_continue,
+        {"continue": "final_check", "handle_error": "handle_error"},
     )
 
-    # final_check の後の遷移 (新しい条件関数を使用)
+    # 最終チェック後の分岐を設定
     graph.add_conditional_edges(
         "final_check",
         check_and_decide_next_step,
         {
-            "finish": END,  # 適合した場合
-            "replan": "replan",  # 不適合でリトライ可能な場合
-            "handle_error": "handle_error",  # エラーまたはリトライ上限の場合
+            "finish": END,  # 適合 -> 終了
+            "replan": "replan",  # 不適合 (リトライ可) -> 再計画
+            "handle_error": "handle_error",  # 不適合 (リトライ不可) or エラー -> エラー処理
         },
     )
 
-    # replan から gather_data へ戻る (ループ)
+    # 再計画ノードからデータ収集ノードへ戻るループエッジ
     graph.add_edge("replan", "gather_data")
 
-    # handle_error からは必ず終了
+    # エラー処理ノードからは必ず終了
     graph.add_edge("handle_error", END)
 
-    # TODO: nodes.pyの各Agentクラスのrunメソッドの戻り値が、
-    # 上記のラッパー関数 (gather_data_node, analyze_synthesize_node) が期待する
-    # 形式 (AgentStateの更新部分を含む辞書) と一致しているか確認・修正が必要。
+    # TODO: nodes.py の各 Agent クラスの run メソッドの戻り値が、
+    # このファイルのラッパー関数が期待する形式 (AgentState の更新部分を含む辞書) と一致していることを確認済み。
 
     logging.info("Agent graph built successfully.")
     return graph

@@ -6,8 +6,13 @@ readme = "README.md"
 requires-python = ">=3.12.0,<4.0.0"
 dependencies = [
     "jinja2>=3.1.6",
+    "langchain>=0.3.23",
+    "langchain-anthropic>=0.3.10",
+    "langchain-community>=0.3.21",
     "langchain-openai>=0.3.12",
     "langgraph>=0.3.25",
+    "pydantic-settings>=2.8.1",
+    "pygraphviz>=1.14",
     "python-dotenv>=1.1.0",
     "tavily-python>=0.5.4",
 ]
@@ -37,3 +42,45 @@ vcs = "git"
 style = "pep440"
 bump = true
 fallback-version = "0.0.0"
+
+[tool.ruff]
+line-length = 120
+target-version = "py312"
+
+[tool.ruff.lint]
+select = ["E", "F", "I"]
+ignore = ["T201", "COM812", "ISC001"]
+fixable = ["ALL"]
+unfixable = ["F841"]
+
+[tool.ruff.format]
+quote-style = "double"
+indent-style = "space"
+skip-magic-trailing-comma = false
+line-ending = "auto"
+docstring-code-format = true
+
+[tool.ruff.lint.pylint]
+max-args = 6
+
+[tool.ruff.lint.per-file-ignores]
+"tests/**/*.py" = ["D", "S101", "N802", "ARG"]
+"__init__.py" = ["F401"]
+
+[tool.mypy]
+python_version = "3.12"
+warn_unused_configs = true
+disallow_untyped_defs = true
+show_error_codes = true
+no_implicit_optional = true
+warn_return_any = true
+warn_unused_ignores = true
+ignore_missing_imports = true
+
+[[tool.mypy.overrides]]
+module = "tavily.*"
+ignore_missing_imports = true
+
+[[tool.mypy.overrides]]
+module = ["tests.*"]
+disallow_untyped_defs = false

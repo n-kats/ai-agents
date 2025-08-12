@@ -6,7 +6,10 @@
 # ドキュメントの参照
 
 - 開発においては、必要に応じて`docs`ディレクトリ内のドキュメントを参照すること。
-- 特に、`docs/meta_plan/docs_guidelines.md`や`docs/meta_plan/documentation_organization_policy_jp.md`を参照することを推奨する。
+- 特に、以下のドキュメントを参照することを推奨する。
+  - ドキュメント全般のガイドライン: `docs/meta_plan/docs_guidelines.md`
+  - コードコメントのガイドライン: `docs/meta_plan/comment_guidelines.md`
+  - ドキュメント構成ポリシー: `docs/meta_plan/directory_structure.md`
 
 # ファイルの更新
 

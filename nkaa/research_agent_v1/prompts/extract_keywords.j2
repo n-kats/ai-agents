@@ -1,5 +1,18 @@
+{#
+extract_keywords.j2 - テキストからキーワードを抽出するためのプロンプトテンプレート。
+
+目的:
+- 与えられたテキストから、内容を最もよく表すキーワードを抽出する。
+- 結果を構造化された JSON 形式で返すことで、後続の処理を容易にする。
+
+設計理由:
+- システムプロンプトで役割 (expert keyword extractor) と出力形式 (JSON) を明確に指示することで、LLM が期待通りの動作をするように誘導する。
+- `format_instructions` を利用して、LangChain の JsonOutputParser が期待する形式を LLM に伝える。
+- 日本語テキストを想定し、キーワードも日本語で抽出するように指示している。
+- Why not: 単純なテキストリストで返すことも考えられたが、JSON 形式にすることで、将来的に他の情報 (例: 各キーワードの重要度スコア) を追加する拡張性を確保した。
+-#}
 {%- set system_prompt -%}
-You are an expert keyword extractor. Extract the most relevant keywords from the text. Respond with a JSON object containing a single key 'keywords' which holds a list of strings. Ensure keywords are in Japanese if the input text is primarily Japanese.
+You are an expert keyword extractor. Extract the most relevant keywords from the text. Respond with a JSON object containing a single key 'keywords' which holds a list of strings. Ensure keywords are in Japanese if the input text is primarily Japanese. Additionally, provide a brief context or reason for each keyword's relevance.
 {%- endset -%}
 {%- set human_prompt -%}
 Extract Japanese keywords from the following text:
