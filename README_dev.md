@@ -1,19 +1,30 @@
-# 基本要素
+# 基本要素（雑メモ）
 * エージェント
 * チャンネル
-* 管理機構（オーケストレーション）
-* コマンド
+* 管理機構（マネージャ）
+* ツール束ね（Adapter 経由）
+* 開発用コマンド
 
 # エージェント
-タスクを実行するための主体
+タスクを実行する主体。`BaseAgent` を継承して `run` / `stop` / `save` / `load` を実装する。
+* 状態保存は各エージェントに委譲（`save()` で jsonl 等）。
+* 設定は `AgentConfig` (Pydantic) が `build()` で生成。
+* プロセス起動は `StandardManager` が担当。エージェントごとに独立プロセスを想定。
+* 記憶はエージェント単位で独立。複数チャネルに同時参加可。
 
 # チャンネル
-エージェント同士がコミュニケーションを行うための媒体
+エージェント同士がコミュニケーションする媒体。チャネルIDは `channel_{n}` で発番。
+* `ChannelManager` がチャネル生成・メンバ管理・未読キュー復元までまとめて担当。
+* `ChannelTools` 経由で `join/leave/send/read/list_channels` を呼ぶ。
+* メッセージ本体は `ChannelMessage`。payload は JSON ライクな任意構造。
+* 未読は `MessageQueue`（中身は `AgentMessagePointer`）で管理。優先度＆投入時刻で順序維持。
+* 永続化は `ChannelRepository` 抽象に委譲。今は `InMemoryChannelRepository` が標準。PostgreSQL 実装は TODO。
 
 # 管理機構（オーケストレーション）
-* エージェント・チャンネルの作成・制御・起動等
-* エージェント・チャンネル間の通信
-* エージェント・チャンネルの状態管理
+* `StandardManager` がエージェント設定ファイルを読み込み → `AgentConfig` へパース → `build()` 呼び出し。
+* エージェントごとにツールをアダプター経由で渡し、子プロセス起動。
+* `stop_event` で停止を指示し、`save()` でエージェントとチャネルをフラッシュ。
+* マネージャ自体も `BaseManager` 抽象に乗る想定。複数マネージャ構成は今後検討。
 
 # 初期コンセプト
 * エージェントは基本エージェントと管理エージェントからなる。
@@ -43,3 +54,17 @@
 
 # 初期エージェントからの変更
 チャンネルエージェントは、単にチャンネルとしての機能（情報の集約所）に制限して、チャンネルエージェントはタスクエージェントに実施させる。それにともない、タスクエージェントは単にエージェントと呼ぶことにする。
+
+# 現状把握メモ
+* `ChannelManager.save()` で全チャネルの `save()` と未読スナップショットを永続層へ。
+* プリセット：`nkaa/presets/managers/single_agent_model.py` が単体エージェント例。`SingleAgentTools` に LLM ダミー (`LLMCallTool`)・ログ・入力・停止関数を束ねる。
+* テスト：`tests/framework/test_channels.py` で InMemory リポジトリの送受信・復元・離脱を確認。
+* ドキュメント連携：設計メモは `docs/concept.md`、進捗は `docs/implementation_status.md`、チャンネル仕様は `docs/channel_spec.md` に置いてある。
+
+# TODO ラフ
+* PostgreSQL 版 `ChannelRepository`（スキーマ設計：履歴＋未読＋所属）。
+* チャネル探索・招待フローの API 設計（ChannelManager 側か別モジュールか検討）。
+* `ChannelMessage.payload` のバージョニング/検証ポリシー。後方互換戦略。
+* `HumanInteractionAgent`（CLI/GUI/I/O ツールセット）とプリセット。
+* エンドツーエンド例と API リファレンス（ドキュメント拡充）。
+* `StandardManager` の複数マネージャ連携（将来的な構想メモ程度）。
