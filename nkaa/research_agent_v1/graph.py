@@ -134,9 +134,7 @@ def final_check_node(state: AgentState) -> Dict[str, Any]:
     # 最終結果が存在しない、またはエラー状態の場合はスキップ
     final_results = state.get("final_results")
     if not final_results or final_results.get("status") == "error":
-        logging.warning(
-            "Skipping final check due to missing or error state in final_results."
-        )
+        logging.warning("Skipping final check due to missing or error state in final_results.")
         # 既存のエラー状態を維持、なければエラーを設定
         return {"error": state.get("error") or "Missing or error in final_results"}
 
@@ -158,9 +156,7 @@ def final_check_node(state: AgentState) -> Dict[str, Any]:
             # 既存のエラーがあれば追記、なければ新規設定
             current_error = state.get("error")
             new_error = f"Final Check Error: {output['check_error']}"
-            combined_error = (
-                f"{current_error}; {new_error}" if current_error else new_error
-            )
+            combined_error = f"{current_error}; {new_error}" if current_error else new_error
             # final_check_results と更新された error を返す
             return {
                 "final_check_results": output.get("final_check_results"),
@@ -186,9 +182,7 @@ def replan_node(state: AgentState) -> Dict[str, Any]:
     logging.debug("--- Running Replan Node ---")
     # エラーが発生している場合や、チェック結果がない場合はスキップ
     if state.get("error") or not state.get("final_check_results"):
-        logging.warning(
-            "Skipping replan due to existing error or missing check results."
-        )
+        logging.warning("Skipping replan due to existing error or missing check results.")
         # エラーを維持し、再試行カウントは増やさない (エラー処理は handle_error ノードに任せる)
         return {"error": state.get("error", "Missing final_check_results for replan")}
 
@@ -209,9 +203,7 @@ def replan_node(state: AgentState) -> Dict[str, Any]:
             # エラーが発生したら、既存のエラーに追加
             current_error = state.get("error")
             new_error = f"Replanning Error: {output['error']}"
-            combined_error = (
-                f"{current_error}; {new_error}" if current_error else new_error
-            )
+            combined_error = f"{current_error}; {new_error}" if current_error else new_error
             # refined_query は更新せず、エラーと更新された retry_count を返す
             return {
                 "error": combined_error,
@@ -219,9 +211,7 @@ def replan_node(state: AgentState) -> Dict[str, Any]:
             }
         else:
             # 成功時は refined_query とインクリメントされた retry_count を返し、エラーをクリアする
-            logging.info(
-                f"Replanning successful. New query: {output.get('refined_query')}"
-            )
+            logging.info(f"Replanning successful. New query: {output.get('refined_query')}")
             return {
                 "refined_query": output.get("refined_query"),
                 "retry_count": output.get("retry_count"),
@@ -256,9 +246,7 @@ def handle_error_node(state: AgentState) -> Dict[str, Any]:
 def should_continue(state: AgentState) -> str:
     """エラー状態に基づいて次の遷移先 ('continue' または 'handle_error') を決定する。"""
     if state.get("error"):
-        logging.warning(
-            f"Workflow error detected: {state['error']}. Routing to handle_error."
-        )
+        logging.warning(f"Workflow error detected: {state['error']}. Routing to handle_error.")
         return "handle_error"
     logging.debug("No error detected. Continuing workflow.")
     return "continue"
@@ -268,9 +256,7 @@ def check_and_decide_next_step(state: AgentState) -> str:
     """最終チェックの結果と再試行回数に基づいて次の遷移先 ('finish', 'replan', 'handle_error') を決定する。"""
     # 先にエラーがないか確認
     if state.get("error"):
-        logging.warning(
-            f"Workflow error detected before final decision: {state['error']}. Routing to handle_error."
-        )
+        logging.warning(f"Workflow error detected before final decision: {state['error']}. Routing to handle_error.")
         return "handle_error"
 
     final_check_results = state.get("final_check_results")
@@ -289,14 +275,10 @@ def check_and_decide_next_step(state: AgentState) -> str:
         logging.info("Final check passed. Ending workflow.")
         return "finish"  # ワークフロー終了
     elif evaluation == "不適合" and retry_count < max_retries:
-        logging.warning(
-            f"Final check failed (Attempt {retry_count + 1}/{max_retries}). Replanning query."
-        )
+        logging.warning(f"Final check failed (Attempt {retry_count + 1}/{max_retries}). Replanning query.")
         return "replan"  # 再計画ノードへ
     elif evaluation == "不適合":
-        logging.error(
-            f"Final check failed after {max_retries} retries. Ending workflow with failure."
-        )
+        logging.error(f"Final check failed after {max_retries} retries. Ending workflow with failure.")
         # 最大リトライ回数に達した場合はエラーとして扱う
         state["error"] = (
             f"Final check failed after {max_retries} retries. Reason: {final_check_results.get('reason', 'Unknown')}"
@@ -308,9 +290,7 @@ def check_and_decide_next_step(state: AgentState) -> str:
         )
         # 既にエラーがあるはずだが念のため設定
         if not state.get("error"):
-            state["error"] = (
-                f"Final check status: {evaluation}. Reason: {final_check_results.get('reason', 'Unknown')}"
-            )
+            state["error"] = f"Final check status: {evaluation}. Reason: {final_check_results.get('reason', 'Unknown')}"
         return "handle_error"
 
 

@@ -31,9 +31,7 @@ class LocalSearchMethod(BaseSearchMethod):
         super().__init__()
         self.target_directory = config.get("target_directory")
         if not self.target_directory or not os.path.isdir(self.target_directory):
-            raise ValueError(
-                f"無効なディレクトリが指定されました: {self.target_directory}"
-            )
+            raise ValueError(f"無効なディレクトリが指定されました: {self.target_directory}")
         self.file_pattern = config.get("file_pattern", "*.*")
         self.encoding = config.get("encoding", "utf-8")
         logger.info(
@@ -60,21 +58,15 @@ class LocalSearchMethod(BaseSearchMethod):
         # target_directory が None でないことをアサート (mypy のため)
         assert self.target_directory is not None
         search_path = os.path.join(self.target_directory, self.file_pattern)
-        found_files = glob.glob(
-            search_path, recursive=True
-        )  # recursive=True でサブディレクトリも検索
+        found_files = glob.glob(search_path, recursive=True)  # recursive=True でサブディレクトリも検索
 
         if not found_files:
-            logger.warning(
-                f"指定されたパターンに一致するファイルが見つかりませんでした: {search_path}"
-            )
+            logger.warning(f"指定されたパターンに一致するファイルが見つかりませんでした: {search_path}")
             return []
 
         results: List[Dict[str, Any]] = []
         for file_path in found_files:
-            if os.path.isfile(
-                file_path
-            ):  # ディレクトリではなくファイルのみを対象とする
+            if os.path.isfile(file_path):  # ディレクトリではなくファイルのみを対象とする
                 try:
                     with open(file_path, "r", encoding=self.encoding) as f:
                         content = f.read()
@@ -88,9 +80,7 @@ class LocalSearchMethod(BaseSearchMethod):
                         )
                         logger.debug(f"Successfully read file: {file_path}")
                 except Exception as e:
-                    logger.error(
-                        f"ファイル '{file_path}' の読み込み中にエラーが発生しました: {e}"
-                    )
+                    logger.error(f"ファイル '{file_path}' の読み込み中にエラーが発生しました: {e}")
 
         if not results:
             logger.warning("ファイルは存在しましたが、内容の読み込みに失敗しました。")

@@ -51,9 +51,7 @@ class SearchMethod(ABC):
         self.name = name
 
     @abstractmethod
-    def search(
-        self, query: str, options: Dict[str, Any] | None = None
-    ) -> Dict[str, Any]:
+    def search(self, query: str, options: Dict[str, Any] | None = None) -> Dict[str, Any]:
         """指定されたクエリで検索を実行する抽象メソッド。
         Args:
             query: 検索クエリ文字列。
@@ -72,9 +70,7 @@ class KeywordWebSearch(SearchMethod):
     def __init__(self, name: str = "keyword_web_search"):
         super().__init__(name)
 
-    def search(
-        self, query: str, options: Dict[str, Any] | None = None
-    ) -> Dict[str, Any]:
+    def search(self, query: str, options: Dict[str, Any] | None = None) -> Dict[str, Any]:
         """Tavily API を使用して Web 検索を実行する。"""
         logging.info(f"Executing KeywordWebSearch for query: {query}")
         api_key = os.getenv("TAVILY_API_KEY")
@@ -108,9 +104,7 @@ class KeywordWebSearch(SearchMethod):
                 for res in response.get("results", [])
             ]
 
-            logging.debug(
-                f"Tavily search completed. Found {len(search_results)} results."
-            )
+            logging.debug(f"Tavily search completed. Found {len(search_results)} results.")
             return {"results": search_results, "source": self.name}
 
         except Exception as e:
@@ -133,13 +127,9 @@ class LocalFileSearch(SearchMethod):
         # ファイル内容も検索するかどうかのフラグ
         self.search_contents = search_contents
 
-    def search(
-        self, query: str, options: Dict[str, Any] | None = None
-    ) -> Dict[str, Any]:
+    def search(self, query: str, options: Dict[str, Any] | None = None) -> Dict[str, Any]:
         """指定されたディレクトリ内で、ファイル名またはファイル内容にクエリが部分一致するファイルを検索する。"""
-        logging.info(
-            f"Executing LocalFileSearch in '{self.directory}' for query: '{query}'"
-        )
+        logging.info(f"Executing LocalFileSearch in '{self.directory}' for query: '{query}'")
         matched_files = []
         try:
             if not os.path.isdir(self.directory):
@@ -170,17 +160,11 @@ class LocalFileSearch(SearchMethod):
                             with open(file_path, "r", encoding="utf-8") as f:
                                 file_content = f.read()
                                 if re.search(query, file_content, re.IGNORECASE):
-                                    matched_files.append(
-                                        f"{file_path} (内容一致)"
-                                    )  # ファイルパスと内容一致を明示
+                                    matched_files.append(f"{file_path} (内容一致)")  # ファイルパスと内容一致を明示
                         except Exception as e:
-                            logging.error(
-                                f"Error reading file {file_path}: {e}"
-                            )  # ファイル読み込みエラーをログ出力
+                            logging.error(f"Error reading file {file_path}: {e}")  # ファイル読み込みエラーをログ出力
 
-            logging.debug(
-                f"Local file search completed. Found {len(matched_files)} matching files."
-            )
+            logging.debug(f"Local file search completed. Found {len(matched_files)} matching files.")
             return {"results": matched_files, "source": self.name}
 
         except Exception as e:
@@ -211,9 +195,7 @@ class DataGatheringAgent(Node):
         else:
             logging.error("Invalid search method type.")
 
-    def execute_search(
-        self, query: str, options: Dict[str, Any] | None = None
-    ) -> Dict[str, Any]:
+    def execute_search(self, query: str, options: Dict[str, Any] | None = None) -> Dict[str, Any]:
         """登録されている全ての検索メソッドを実行し、結果を集約する。"""
         results = {}
         self.set_state("searching")
@@ -239,9 +221,7 @@ class DataGatheringAgent(Node):
         original_query = input_data.get("query", "")  # ログ用
 
         if not query_to_use:
-            logging.warning(
-                f"{self.name} received empty query (original: '{original_query}')."
-            )
+            logging.warning(f"{self.name} received empty query (original: '{original_query}').")
             self.set_state("error_no_query")
             # エラー情報を AgentState に反映させるために返す
             return {"error": "Query is empty"}
@@ -250,22 +230,14 @@ class DataGatheringAgent(Node):
         results = self.execute_search(query_to_use, options)
 
         # いずれかの検索メソッドでエラーが発生したかチェック
-        errors = {
-            k: v.get("error")
-            for k, v in results.items()
-            if isinstance(v, dict) and "error" in v
-        }
+        errors = {k: v.get("error") for k, v in results.items() if isinstance(v, dict) and "error" in v}
         if errors:
             # 複数のエラーメッセージを結合して返す
             combined_error = "; ".join([f"{k}: {e}" for k, e in errors.items()])
             return {"error": f"Data gathering failed: {combined_error}"}
 
         # 成功した結果のみを AgentState 更新用に返す
-        successful_results = {
-            k: v
-            for k, v in results.items()
-            if not (isinstance(v, dict) and "error" in v)
-        }
+        successful_results = {k: v for k, v in results.items() if not (isinstance(v, dict) and "error" in v)}
         # AgentState の data_gathering_results を更新する形式で返す
         return {"data_gathering_results": successful_results}
 
@@ -304,9 +276,7 @@ class SynthesisOutput(BaseModel):
 
     overall_summary: str = Field(description="分析結果全体の要約")
     key_insights: List[str] = Field(description="抽出された主要な洞察や結論のリスト")
-    confidence_score: float = Field(
-        description="結果に対する信頼度スコア (0.0-1.0)", ge=0.0, le=1.0
-    )
+    confidence_score: float = Field(description="結果に対する信頼度スコア (0.0-1.0)", ge=0.0, le=1.0)
 
 
 # --- Concrete Analysis Methods ---
@@ -330,9 +300,7 @@ class TextSummarization(AnalysisMethod):
                     # 各結果が文字列であることを想定。異なる型の場合は適切に変換が必要。
                     text_to_summarize += "\n".join(map(str, results_list))
                 else:
-                    logging.warning(
-                        f"Unexpected format for results in {source}: {results_list}"
-                    )
+                    logging.warning(f"Unexpected format for results in {source}: {results_list}")
             else:
                 logging.warning(f"Skipping unexpected data format for source: {source}")
 
@@ -385,9 +353,7 @@ class KeywordExtraction(AnalysisMethod):
                     text_to_analyze += f"\n--- Source: {source} ---\n"
                     text_to_analyze += "\n".join(map(str, results_list))
                 else:
-                    logging.warning(
-                        f"Unexpected format for results in {source}: {results_list}"
-                    )
+                    logging.warning(f"Unexpected format for results in {source}: {results_list}")
             else:
                 logging.warning(f"Skipping unexpected data format for source: {source}")
 
@@ -553,9 +519,7 @@ class AnalysisSynthesisAgent(Node):
             return {"error": "No search results to analyze"}
 
         analysis_results = self.analyze(search_results)
-        synthesis_result = self.synthesize(
-            analysis_results
-        )  # synthesize はエラー情報を含む可能性あり
+        synthesis_result = self.synthesize(analysis_results)  # synthesize はエラー情報を含む可能性あり
 
         # AgentState の analysis_results と synthesis_results を更新する形式で返す
         return {
@@ -617,15 +581,11 @@ class ReplanAgent(Node):
 
             # LLMが空のクエリを生成した場合のフォールバック
             if not refined_query or not refined_query.strip():
-                logging.warning(
-                    "LLM generated an empty refined query. Using original query for retry."
-                )
+                logging.warning("LLM generated an empty refined query. Using original query for retry.")
                 refined_query = original_query  # 元のクエリで再試行
 
             self.set_state("completed_replanning")
-            logging.info(
-                f"{self.name} finished replanning. Refined query: '{refined_query}'"
-            )
+            logging.info(f"{self.name} finished replanning. Refined query: '{refined_query}'")
             # AgentState の refined_query と retry_count を更新する形式で返す
             return {
                 "refined_query": refined_query.strip(),
@@ -649,9 +609,7 @@ class ReplanAgent(Node):
 class FinalCheckOutput(BaseModel):
     """最終チェック結果の出力スキーマ定義。"""
 
-    evaluation: str = Field(
-        description="元の質問に対する結果の適合性評価（例: 適合, 不適合, 要確認）"
-    )
+    evaluation: str = Field(description="元の質問に対する結果の適合性評価（例: 適合, 不適合, 要確認）")
     reason: str = Field(description="評価の理由")
 
 
@@ -673,11 +631,10 @@ class FinalCheckAgent(Node):
         final_results_from_organizer = input_data.get("final_results")
 
         # 前段 (organize_results や synthesize) でエラーが発生しているかチェック
-        if (
-            final_results_from_organizer
-            and final_results_from_organizer.get("status") == "error"
-        ):
-            error_msg = f"Final check skipped due to error in organize_results: {final_results_from_organizer.get('message')}"
+        if final_results_from_organizer and final_results_from_organizer.get("status") == "error":
+            error_msg = (
+                f"Final check skipped due to error in organize_results: {final_results_from_organizer.get('message')}"
+            )
             logging.warning(error_msg)
             # エラー情報を check_error として返し、評価は「スキップ」とする
             return {
@@ -736,9 +693,7 @@ class FinalCheckAgent(Node):
             )
 
             self.set_state("completed_check")
-            logging.info(
-                f"{self.name} finished final check. Evaluation: {check_result.get('evaluation')}"
-            )
+            logging.info(f"{self.name} finished final check. Evaluation: {check_result.get('evaluation')}")
             # AgentState の final_check_results を更新する形式で返す
             # 評価自体が成功した場合、check_error は含めない
             return {"final_check_results": check_result}

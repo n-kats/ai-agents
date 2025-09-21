@@ -54,9 +54,7 @@ class FinalCheckNode(BaseNode):
             self.check_prompt = ChatPromptTemplate.from_template(prompt_template_str)
             logger.info(f"プロンプト '{check_prompt_name}.j2' を読み込みました。")
         except FileNotFoundError:
-            logger.error(
-                f"最終チェックプロンプトファイル '{check_prompt_name}.j2' が見つかりません。"
-            )
+            logger.error(f"最終チェックプロンプトファイル '{check_prompt_name}.j2' が見つかりません。")
             self.check_prompt = ChatPromptTemplate.from_template(
                 "エラー: 最終チェックプロンプトが見つかりません。クエリ: {query}"
             )
@@ -86,21 +84,15 @@ class FinalCheckNode(BaseNode):
 
         if not report:
             # レポートがない場合はチェック失敗とするか、エラーとするか検討
-            logger.warning(
-                f"ノード '{self.node_name}': チェック対象のレポートが存在しません。"
-            )
+            logger.warning(f"ノード '{self.node_name}': チェック対象のレポートが存在しません。")
             state["final_check_passed"] = False
             # エラーとして扱う場合:
             # return self._handle_error(state, "MissingInput", "チェック対象のレポートが state に存在しません。")
             return state
         if not query:
-            return self._handle_error(
-                state, "MissingInput", "現在のクエリが state に存在しません。"
-            )
+            return self._handle_error(state, "MissingInput", "現在のクエリが state に存在しません。")
 
-        logger.info(
-            f"ノード '{self.node_name}' を開始します。レポートの品質チェックを行います..."
-        )
+        logger.info(f"ノード '{self.node_name}' を開始します。レポートの品質チェックを行います...")
 
         try:
             chain = self.check_prompt | self.llm_client | self.output_parser
@@ -114,9 +106,7 @@ class FinalCheckNode(BaseNode):
             logger.warning(f"品質チェックの評価結果を解析できませんでした: {ve}")
             state["final_check_passed"] = False  # 解析失敗時は不合格扱い
         except Exception as e:
-            logger.error(
-                f"品質チェック中に予期せぬエラーが発生しました: {e}", exc_info=True
-            )
+            logger.error(f"品質チェック中に予期せぬエラーが発生しました: {e}", exc_info=True)
             # その他のエラー時もチェック失敗として扱う
             state["final_check_passed"] = False  # チェック自体は失敗
             # エラー情報を記録する

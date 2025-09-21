@@ -68,9 +68,7 @@ def instantiate_search_methods(
             if method_class:
                 try:
                     # メソッド固有の設定を辞書に変換して渡す
-                    method_settings_dict: Dict[str, Any] = (
-                        config.settings.model_dump() if config.settings else {}
-                    )
+                    method_settings_dict: Dict[str, Any] = config.settings.model_dump() if config.settings else {}
                     # メソッドの種類に応じて初期化方法を分岐
                     if config.method_name == "local_search":
                         # LocalSearchMethod は 'config' 引数を期待
@@ -83,9 +81,7 @@ def instantiate_search_methods(
                     #     logging.warning(f"検索メソッド '{config.method_name}' の初期化方法が不明です。")
                     #     methods.append(method_class(config=method_settings_dict)) # 仮
 
-                    logging.info(
-                        f"検索メソッド '{config.method_name}' をインスタンス化しました。"
-                    )
+                    logging.info(f"検索メソッド '{config.method_name}' をインスタンス化しました。")
                 except Exception as e:
                     logging.error(
                         f"検索メソッド '{config.method_name}' のインスタンス化に失敗: {e}",
@@ -115,9 +111,7 @@ def instantiate_analysis_methods(
             if method_class:
                 try:
                     # メソッド固有の設定を辞書に変換して渡す
-                    method_settings_dict: Dict[str, Any] = (
-                        config.settings.model_dump() if config.settings else {}
-                    )
+                    method_settings_dict: Dict[str, Any] = config.settings.model_dump() if config.settings else {}
                     # 分析メソッドに LLM クライアントとメソッド固有設定を渡す
                     methods.append(
                         method_class(
@@ -125,9 +119,7 @@ def instantiate_analysis_methods(
                             settings=method_settings_dict,
                         )
                     )
-                    logging.info(
-                        f"分析メソッド '{config.method_name}' をインスタンス化しました。"
-                    )
+                    logging.info(f"分析メソッド '{config.method_name}' をインスタンス化しました。")
                 except Exception as e:
                     logging.error(
                         f"分析メソッド '{config.method_name}' のインスタンス化に失敗: {e}",
@@ -181,9 +173,7 @@ def setup_logging(log_level: str):
         },
     }
     logging.config.dictConfig(LOGGING_CONFIG)
-    logging.info(
-        f"ロギング設定を dictConfig で適用しました (Level: {level})。"
-    )  # 設定適用後にINFOログ
+    logging.info(f"ロギング設定を dictConfig で適用しました (Level: {level})。")  # 設定適用後にINFOログ
 
     # Langchain や Langgraph のログレベルも調整する場合はここで行う (dictConfig内で設定推奨)
     # logging.getLogger("langchain").setLevel(logging.WARNING)
@@ -209,15 +199,11 @@ def run_agent(query: str, config_path: Optional[str] = None):
         # 2. 依存関係のインスタンス化 (DI)
         # get_llm_client に settings オブジェクト全体を渡すように修正
         llm_client = get_llm_client(settings)
-        logging.info(
-            f"LLMクライアント ({settings.llm.provider}, {settings.llm.model_name}) を準備しました。"
-        )
+        logging.info(f"LLMクライアント ({settings.llm.provider}, {settings.llm.model_name}) を準備しました。")
 
         # 3. メソッドのインスタンス化
         search_methods = instantiate_search_methods(settings.search_methods, settings)
-        analysis_methods = instantiate_analysis_methods(
-            settings.analysis_methods, settings
-        )
+        analysis_methods = instantiate_analysis_methods(settings.analysis_methods, settings)
 
         if not search_methods:
             logging.warning("有効な検索メソッドが設定されていません。")
@@ -229,9 +215,7 @@ def run_agent(query: str, config_path: Optional[str] = None):
 
         # ノードのインスタンス化
         data_gathering_node = DataGatheringNode(search_methods=search_methods)
-        analysis_synthesis_node = AnalysisSynthesisNode(
-            analysis_methods=analysis_methods, llm_client=llm_client
-        )
+        analysis_synthesis_node = AnalysisSynthesisNode(analysis_methods=analysis_methods, llm_client=llm_client)
         final_check_node = FinalCheckNode(llm_client=llm_client)
         replan_node = ReplanNode(llm_client=llm_client)
         logging.info("全ノードをインスタンス化しました。")
@@ -281,26 +265,16 @@ def run_agent(query: str, config_path: Optional[str] = None):
             logging.info(f"--- ステップ: {state_key} ---")
             # logging.debug(pprint.pformat(current_state_data)) # 詳細な状態を出力
             # 簡易表示:
-            print(
-                f"[{state_key}] Current Query: {current_state_data.get('current_query')}"
-            )
+            print(f"[{state_key}] Current Query: {current_state_data.get('current_query')}")
             if current_state_data.get("error_info"):
                 print(f"  ERROR: {current_state_data['error_info']}")
             if state_key == "data_gathering":
-                print(
-                    f"  Search Results Count: {len(current_state_data.get('search_results', []))}"
-                )
+                print(f"  Search Results Count: {len(current_state_data.get('search_results', []))}")
             if state_key == "analysis_synthesis":
-                print(
-                    f"  Analysis Results Keys: {list(current_state_data.get('analysis_results', {}).keys())}"
-                )
-                print(
-                    f"  Synthesis Result Length: {len(current_state_data.get('synthesis_result', ''))}"
-                )
+                print(f"  Analysis Results Keys: {list(current_state_data.get('analysis_results', {}).keys())}")
+                print(f"  Synthesis Result Length: {len(current_state_data.get('synthesis_result', ''))}")
             if state_key == "final_check":
-                print(
-                    f"  Final Check Passed: {current_state_data.get('final_check_passed')}"
-                )
+                print(f"  Final Check Passed: {current_state_data.get('final_check_passed')}")
             if state_key == "replan":
                 print("  Replanning...")
 
@@ -323,9 +297,7 @@ def run_agent(query: str, config_path: Optional[str] = None):
             print("エージェントが最終状態に到達しませんでした。")
 
     except Exception as e:
-        logging.error(
-            f"エージェントの実行中に予期せぬエラーが発生しました: {e}", exc_info=True
-        )
+        logging.error(f"エージェントの実行中に予期せぬエラーが発生しました: {e}", exc_info=True)
         sys.exit(1)
 
 
@@ -336,9 +308,7 @@ def main():
     """コマンドライン引数を処理し、エージェントを実行する"""
     parser = argparse.ArgumentParser(description="Research Agent v2")
     parser.add_argument("query", type=str, help="調査したい初期クエリ")
-    parser.add_argument(
-        "-c", "--config", type=str, default=None, help="設定ファイル(YAML/TOML)のパス"
-    )
+    parser.add_argument("-c", "--config", type=str, default=None, help="設定ファイル(YAML/TOML)のパス")
     args = parser.parse_args()
 
     run_agent(query=args.query, config_path=args.config)

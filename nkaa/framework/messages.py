@@ -1,4 +1,6 @@
 from nkaa.framework.agent import BaseMessage
+
+
 class StopMessage(BaseMessage):
     """
     A message to stop the agent.
@@ -19,7 +21,7 @@ class AgentToChannelMessage(BaseMessage):
     This message is used to communicate with channel agents.
     """
 
-    def __init__(self, agent_id_from: str, channel_id_to: str, content,  created_at: datetime = None):
+    def __init__(self, agent_id_from: str, channel_id_to: str, content, created_at: datetime = None):
         super().__init__(created_at=created_at)
         self.__agent_id_from = agent_id_from
         self.__channel_id_to = channel_id_to

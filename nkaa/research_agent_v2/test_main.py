@@ -91,12 +91,8 @@ class TestRunAgent(unittest.TestCase):
         mock_load_settings.assert_called_once_with("config.yaml")  # デフォルトパス
         mock_setup_logging.assert_called_once_with("INFO")
         mock_get_llm.assert_called_once_with(mock_settings)
-        mock_inst_search.assert_called_once_with(
-            mock_settings.search_methods, mock_settings
-        )
-        mock_inst_analysis.assert_called_once_with(
-            mock_settings.analysis_methods, mock_settings
-        )
+        mock_inst_search.assert_called_once_with(mock_settings.search_methods, mock_settings)
+        mock_inst_analysis.assert_called_once_with(mock_settings.analysis_methods, mock_settings)
         mock_build_graph.assert_called_once_with(
             data_gathering_node=ANY,
             analysis_synthesis_node=ANY,
@@ -120,9 +116,7 @@ class TestRunAgent(unittest.TestCase):
             "replan_attempts": 0,
         }
         expected_config = {"configurable": {"thread_id": "test-uuid"}}
-        mock_app.stream.assert_called_once_with(
-            expected_initial_state, config=expected_config
-        )
+        mock_app.stream.assert_called_once_with(expected_initial_state, config=expected_config)
 
         # print 呼び出しの検証 (一部)
         mock_print.assert_any_call("\n--- 最終結果 ---")
@@ -146,9 +140,7 @@ class TestRunAgent(unittest.TestCase):
         """run_agent のセットアップ中にエラーが発生した場合のテスト."""
         # --- モックの設定 ---
         error_message = "Failed to load settings"
-        mock_load_settings.side_effect = RuntimeError(
-            error_message
-        )  # 設定読み込みでエラー
+        mock_load_settings.side_effect = RuntimeError(error_message)  # 設定読み込みでエラー
 
         # --- 実行 ---
         run_agent("test query")
@@ -191,9 +183,7 @@ class TestRunAgent(unittest.TestCase):
         mock_compile.return_value = mock_app
 
         # stream の戻り値 (エラー状態)
-        error_info = StructuredError(
-            node_name="some_node", error_code="SomeError", message="Error in node"
-        )
+        error_info = StructuredError(node_name="some_node", error_code="SomeError", message="Error in node")
         final_error_state: AgentState = {
             "initial_query": "test query",
             "current_query": "test query",

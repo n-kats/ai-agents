@@ -19,14 +19,10 @@ class TestAnalysisSynthesisNode(unittest.TestCase):
 
     def setUp(self):
         """テスト前のセットアップ."""
-        patcher = patch(
-            "nkaa.research_agent_v2.utils.prompt_loader.load_prompt_template"
-        )
+        patcher = patch("nkaa.research_agent_v2.utils.prompt_loader.load_prompt_template")
         self.addCleanup(patcher.stop)
         self.mock_load_prompt = patcher.start()
-        self.mock_load_prompt.return_value = (
-            "合成プロンプト: {query} {analysis_results} {search_results_summary}"
-        )
+        self.mock_load_prompt.return_value = "合成プロンプト: {query} {analysis_results} {search_results_summary}"
         self.mock_llm_client = MagicMock(spec=BaseChatModel)
 
         # 分析メソッドのモックを作成
@@ -82,7 +78,9 @@ class TestAnalysisSynthesisNode(unittest.TestCase):
 
         # 検証
         # 分析メソッド呼び出し確認
-        expected_analysis_input = "Source: web - Doc 1\nContent: Content of doc 1.\n\nSource: local - /path/doc2\nContent: Content of doc 2."
+        expected_analysis_input = (
+            "Source: web - Doc 1\nContent: Content of doc 1.\n\nSource: local - /path/doc2\nContent: Content of doc 2."
+        )
         self.mock_summarize.assert_called_once_with(data=expected_analysis_input)
         self.mock_keyword.assert_called_once_with(data=expected_analysis_input)
 
@@ -97,9 +95,7 @@ class TestAnalysisSynthesisNode(unittest.TestCase):
 
         # 状態更新確認
         self.assertEqual(result_state["analysis_results"]["summarize"], summary_result)
-        self.assertEqual(
-            result_state["analysis_results"]["keyword_extract"], keyword_result
-        )
+        self.assertEqual(result_state["analysis_results"]["keyword_extract"], keyword_result)
         self.assertEqual(result_state["synthesis_result"], synthesis_report)
         self.assertIsNone(result_state["error_info"])
         self.assertFalse(result_state["replan_needed"])
@@ -119,9 +115,7 @@ class TestAnalysisSynthesisNode(unittest.TestCase):
             "replan_attempts": 0,
         }
         error_message = "Analysis failed"
-        self.mock_summarize.side_effect = Exception(
-            error_message
-        )  # summarize でエラー発生
+        self.mock_summarize.side_effect = Exception(error_message)  # summarize でエラー発生
         self.mock_keyword.return_value = ["key"]  # keyword は呼ばれないはず
 
         # 実行
@@ -154,9 +148,7 @@ class TestAnalysisSynthesisNode(unittest.TestCase):
         self.mock_summarize.return_value = "summary"
         self.mock_keyword.return_value = ["key"]
         error_message = "Synthesis LLM failed"
-        self.mock_llm_client.invoke.side_effect = Exception(
-            error_message
-        )  # 合成でエラー
+        self.mock_llm_client.invoke.side_effect = Exception(error_message)  # 合成でエラー
 
         # 実行
         result_state = self.node(initial_state)
@@ -202,9 +194,7 @@ class TestAnalysisSynthesisNode(unittest.TestCase):
         result_state_no_query = self.node(state_no_query)
 
         self.assertIsInstance(result_state_no_results["error_info"], StructuredError)
-        self.assertEqual(
-            result_state_no_results["error_info"].error_code, "MissingInput"
-        )
+        self.assertEqual(result_state_no_results["error_info"].error_code, "MissingInput")
         self.assertIn("検索結果", result_state_no_results["error_info"].message)
 
         self.assertIsInstance(result_state_no_query["error_info"], StructuredError)

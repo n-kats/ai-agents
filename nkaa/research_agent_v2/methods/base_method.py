@@ -23,9 +23,7 @@ class BaseSearchMethod(abc.ABC):
         コンストラクタ。必要に応じてAPIキーなどの設定を受け取る。
         """
         if not hasattr(self, "method_name") or not self.method_name:
-            raise NotImplementedError(
-                "サブクラスはクラス変数 'method_name' を定義する必要があります。"
-            )
+            raise NotImplementedError("サブクラスはクラス変数 'method_name' を定義する必要があります。")
         # 設定の初期化など
 
     @abc.abstractmethod
@@ -71,9 +69,7 @@ class BaseAnalysisMethod(abc.ABC):
         コンストラクタ。必要に応じてLLMクライアントや設定を受け取る。
         """
         if not hasattr(self, "method_name") or not self.method_name:
-            raise NotImplementedError(
-                "サブクラスはクラス変数 'method_name' を定義する必要があります。"
-            )
+            raise NotImplementedError("サブクラスはクラス変数 'method_name' を定義する必要があります。")
         # self.llm_client = llm_client
         # self.settings = settings
         # その他の初期化

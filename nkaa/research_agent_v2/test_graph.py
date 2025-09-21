@@ -101,9 +101,7 @@ class TestGraphBuilding(unittest.TestCase):
 
         # ケース1: エラーあり -> finish
         state_with_error: AgentState = {
-            "error_info": StructuredError(
-                node_name="test", error_code="Test", message="test"
-            )
+            "error_info": StructuredError(node_name="test", error_code="Test", message="test")
         }  # type: ignore
         self.assertEqual(should_replan_func(state_with_error), "finish")
 

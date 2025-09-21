@@ -49,9 +49,7 @@ class TestBaseNodeMethods(unittest.TestCase):
         node = ConcreteNode()
         initial_state: AgentState = {
             "current_query": "initial",
-            "error_info": StructuredError(
-                node_name="prev", error_code="PrevError", message="Previous error"
-            ),
+            "error_info": StructuredError(node_name="prev", error_code="PrevError", message="Previous error"),
             # 他の必須キーも設定
             "initial_query": "iq",
             "search_plan": None,
@@ -65,14 +63,10 @@ class TestBaseNodeMethods(unittest.TestCase):
         # execute が返す状態を定義
         expected_state_after_execute = initial_state.copy()
         expected_state_after_execute["current_query"] = "initial_processed"
-        expected_state_after_execute["error_info"] = (
-            None  # execute 内でエラーがなければ None のはず
-        )
+        expected_state_after_execute["error_info"] = None  # execute 内でエラーがなければ None のはず
 
         # node.execute をモック
-        with patch.object(
-            node, "execute", return_value=expected_state_after_execute
-        ) as mock_execute:
+        with patch.object(node, "execute", return_value=expected_state_after_execute) as mock_execute:
             result_state = node(initial_state.copy())  # コピーを渡す
 
             # 検証
@@ -83,9 +77,7 @@ class TestBaseNodeMethods(unittest.TestCase):
             self.assertIsNone(
                 call_args_state.get("error_info")
             )  # execute に渡る state では error_info がクリアされているはず
-            self.assertEqual(
-                call_args_state["current_query"], "initial"
-            )  # 元の state が渡されている
+            self.assertEqual(call_args_state["current_query"], "initial")  # 元の state が渡されている
 
             # 最終的な結果が execute の戻り値と同じか確認
             self.assertEqual(result_state, expected_state_after_execute)
@@ -109,9 +101,7 @@ class TestBaseNodeMethods(unittest.TestCase):
         error_message = "Execution failed"
 
         # node.execute が例外を送出するようにモック
-        with patch.object(
-            node, "execute", side_effect=Exception(error_message)
-        ) as mock_execute:
+        with patch.object(node, "execute", side_effect=Exception(error_message)) as mock_execute:
             result_state = node(initial_state.copy())  # コピーを渡す
 
             # 検証

@@ -50,24 +50,16 @@ class WebSearchMethod(BaseSearchMethod):
                 )
             else:
                 try:
-                    self.search_tool = TavilySearchResults(
-                        api_key=self.api_key, max_results=self.num_results
-                    )
-                    logger.info(
-                        f"Tavily検索ツールを初期化しました (max_results={self.num_results})。"
-                    )
+                    self.search_tool = TavilySearchResults(api_key=self.api_key, max_results=self.num_results)
+                    logger.info(f"Tavily検索ツールを初期化しました (max_results={self.num_results})。")
                 except ImportError:
-                    logger.error(
-                        "Tavily検索ツールを使用するには 'tavily-python' をインストールしてください。"
-                    )
+                    logger.error("Tavily検索ツールを使用するには 'tavily-python' をインストールしてください。")
                     self.search_tool = None
                 except Exception as e:
                     logger.error(f"Tavily検索ツールの初期化に失敗しました: {e}")
                     self.search_tool = None
         else:
-            logger.error(
-                f"サポートされていないWeb検索プロバイダーです: {self.provider}"
-            )
+            logger.error(f"サポートされていないWeb検索プロバイダーです: {self.provider}")
 
     def execute(self, query: str, **kwargs: Any) -> List[Dict[str, Any]]:
         """
@@ -82,14 +74,10 @@ class WebSearchMethod(BaseSearchMethod):
             エラー発生時やツールが初期化されていない場合は空リストを返す。
         """
         if not self.search_tool:
-            logger.error(
-                f"メソッド '{self.method_name}': 検索ツールが初期化されていません。"
-            )
+            logger.error(f"メソッド '{self.method_name}': 検索ツールが初期化されていません。")
             return []
 
-        logger.info(
-            f"メソッド '{self.method_name}' ({self.provider}) を開始します。クエリ: '{query}'"
-        )
+        logger.info(f"メソッド '{self.method_name}' ({self.provider}) を開始します。クエリ: '{query}'")
 
         try:
             # TavilySearchResults は結果を辞書のリストとして返す
@@ -97,9 +85,7 @@ class WebSearchMethod(BaseSearchMethod):
             results = self.search_tool.invoke(query)
 
             if not isinstance(results, list):
-                logger.warning(
-                    f"Tavily検索結果が予期しない形式です ({type(results)})。空リストを返します。"
-                )
+                logger.warning(f"Tavily検索結果が予期しない形式です ({type(results)})。空リストを返します。")
                 return []
 
             # 結果を標準形式に整形
@@ -110,9 +96,7 @@ class WebSearchMethod(BaseSearchMethod):
                         {
                             "source": "web",
                             "url": res.get("url"),
-                            "title": res.get(
-                                "title", "タイトルなし"
-                            ),  # title があれば使う
+                            "title": res.get("title", "タイトルなし"),  # title があれば使う
                             "content": res.get("content"),
                             "search_method": self.method_name,  # どのメソッドからの結果か
                             "provider": self.provider,

@@ -34,9 +34,7 @@ class BaseNode(abc.ABC):
         # self.llm_client = llm_client
         # self.settings = settings
         if not hasattr(self, "node_name") or not self.node_name:
-            raise NotImplementedError(
-                "サブクラスはクラス変数 'node_name' を定義する必要があります。"
-            )
+            raise NotImplementedError("サブクラスはクラス変数 'node_name' を定義する必要があります。")
 
     @abc.abstractmethod
     def execute(self, state: "AgentState") -> "AgentState":

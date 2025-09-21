@@ -84,9 +84,7 @@ class TestSettingsLoading(unittest.TestCase):
     )
     def test_settings_loading_defaults_and_env(self, mock_exists):
         """デフォルト値と環境変数から設定が読み込まれるかのテスト (YAML/dotenv なし)。"""
-        mock_exists.return_value = (
-            False  # config.yaml と .env が存在しないように見せかける
-        )
+        mock_exists.return_value = False  # config.yaml と .env が存在しないように見せかける
 
         settings = load_settings(force_reload=True)
 
@@ -96,9 +94,7 @@ class TestSettingsLoading(unittest.TestCase):
         self.assertEqual(settings.llm.provider, "openai")
         self.assertEqual(settings.llm.model_name, "gpt-4o")
         self.assertEqual(settings.llm.temperature, 0.7)
-        self.assertEqual(
-            settings.llm.max_tokens, 4096
-        )  # Noneから4096に変更 (デフォルト値が変わった可能性)
+        self.assertEqual(settings.llm.max_tokens, 4096)  # Noneから4096に変更 (デフォルト値が変わった可能性)
         self.assertIsNone(settings.llm.extra_params)
 
         # settings.py の default=[] にも関わらず、テスト実行時にデフォルト値が入るため、
@@ -118,9 +114,7 @@ class TestSettingsLoading(unittest.TestCase):
         self.assertTrue(settings.search_methods[1].enabled)
         self.assertIsInstance(settings.search_methods[1].settings, LocalSearchSettings)
         # target_directory は必須だが、エラーメッセージでは Path('docs') が入っている模様
-        self.assertEqual(
-            settings.search_methods[1].settings.target_directory, Path("docs")
-        )
+        self.assertEqual(settings.search_methods[1].settings.target_directory, Path("docs"))
         self.assertEqual(settings.search_methods[1].settings.file_pattern, "*.*")
 
         # analysis_methods も同様にデフォルトが生成されると仮定して確認
@@ -134,23 +128,15 @@ class TestSettingsLoading(unittest.TestCase):
         self.assertEqual(
             settings.analysis_methods[0].settings.chunk_size, 3500
         )  # エラーメッセージに合わせて 3500 に修正
-        self.assertEqual(
-            settings.analysis_methods[0].settings.overlap, 150
-        )  # エラーメッセージに合わせて 150 に修正
+        self.assertEqual(settings.analysis_methods[0].settings.overlap, 150)  # エラーメッセージに合わせて 150 に修正
         # KeywordExtractConfig のデフォルト値確認
         self.assertIsInstance(settings.analysis_methods[1], KeywordExtractConfig)
         self.assertEqual(settings.analysis_methods[1].method_name, "keyword_extract")
         self.assertTrue(settings.analysis_methods[1].enabled)
-        self.assertIsInstance(
-            settings.analysis_methods[1].settings, KeywordExtractSettings
-        )
-        self.assertEqual(
-            settings.analysis_methods[1].settings.num_keywords, 8
-        )  # エラーメッセージに合わせて 8 に修正
+        self.assertIsInstance(settings.analysis_methods[1].settings, KeywordExtractSettings)
+        self.assertEqual(settings.analysis_methods[1].settings.num_keywords, 8)  # エラーメッセージに合わせて 8 に修正
 
-        self.assertEqual(
-            settings.max_replan_attempts, 2
-        )  # エラーメッセージに合わせて 2 に修正
+        self.assertEqual(settings.max_replan_attempts, 2)  # エラーメッセージに合わせて 2 に修正
         self.assertIsNone(settings.ollama_base_url)  # デフォルトはNone
 
         # 環境変数からの読み込み確認
@@ -162,9 +148,7 @@ class TestSettingsLoading(unittest.TestCase):
 
     @patch("os.path.exists")
     @patch("builtins.open", new_callable=mock_open, read_data=CUSTOM_CONFIG_YAML)
-    @patch.dict(
-        os.environ, {"ANTHROPIC_API_KEY": "env_anthropic_key"}, clear=True
-    )  # 別の環境変数を設定
+    @patch.dict(os.environ, {"ANTHROPIC_API_KEY": "env_anthropic_key"}, clear=True)  # 別の環境変数を設定
     def test_settings_loading_custom_yaml_and_env(self, mock_open_file, mock_exists):
         """カスタムYAMLと環境変数から設定が読み込まれ、デフォルトを上書きするかのテスト。"""
 
@@ -192,9 +176,7 @@ class TestSettingsLoading(unittest.TestCase):
                 except OSError:
                     # テスト実行環境によっては残ってしまう可能性もあるためログ出力に留める
                     # (あるいは shutil.rmtree を使う)
-                    print(
-                        f"Warning: Could not remove temporary directory {custom_docs_dir}"
-                    )
+                    print(f"Warning: Could not remove temporary directory {custom_docs_dir}")
 
         # YAML で上書きされた値の確認
         self.assertEqual(settings.log_level, "DEBUG")
@@ -204,9 +186,7 @@ class TestSettingsLoading(unittest.TestCase):
         self.assertEqual(settings.llm.max_tokens, 2000)
         self.assertEqual(settings.llm.extra_params, {"custom_anthropic_param": True})
         self.assertEqual(settings.max_replan_attempts, 1)
-        self.assertEqual(
-            settings.ollama_base_url, "http://ollama:11434"
-        )  # YAMLからの読み込みを期待 (元に戻す)
+        self.assertEqual(settings.ollama_base_url, "http://ollama:11434")  # YAMLからの読み込みを期待 (元に戻す)
 
         # search_methods の確認 (YAML の内容)
         self.assertEqual(len(settings.search_methods), 2)
@@ -232,16 +212,12 @@ class TestSettingsLoading(unittest.TestCase):
         self.assertEqual(settings.analysis_methods[0].settings.chunk_size, 1000)
         self.assertEqual(settings.analysis_methods[1].method_name, "keyword_extract")
         self.assertTrue(settings.analysis_methods[1].enabled)
-        self.assertIsInstance(
-            settings.analysis_methods[1].settings, KeywordExtractSettings
-        )
+        self.assertIsInstance(settings.analysis_methods[1].settings, KeywordExtractSettings)
         self.assertEqual(settings.analysis_methods[1].settings.num_keywords, 5)
 
         # 環境変数からの読み込み確認 (YAML にないもの)
         self.assertIsInstance(settings.anthropic_api_key, SecretStr)
-        self.assertEqual(
-            settings.anthropic_api_key.get_secret_value(), "env_anthropic_key"
-        )
+        self.assertEqual(settings.anthropic_api_key.get_secret_value(), "env_anthropic_key")
         self.assertIsNone(settings.openai_api_key)  # 環境変数にも YAML にもない
         self.assertIsNone(settings.tavily_api_key)  # 環境変数にも YAML にもない
 

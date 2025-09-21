@@ -35,9 +35,7 @@ _log = logging.getLogger(__name__)  # Use a specific logger
 
 
 def get_llm_client(settings: Settings) -> BaseChatModel:  # 引数を Settings 全体に変更
-    _log.debug(
-        "--- get_llm_client function entered ---"
-    )  # Add log at the very beginning
+    _log.debug("--- get_llm_client function entered ---")  # Add log at the very beginning
     _log.debug(f"Received settings.llm.provider: {settings.llm.provider}")
     """
     指定されたアプリケーション設定に基づいて、LangChainのChatModelインスタンスを取得する。
@@ -57,7 +55,9 @@ def get_llm_client(settings: Settings) -> BaseChatModel:  # 引数を Settings �
     llm_settings = settings.llm
 
     # キャッシュキーを作成 (設定内容に基づいて一意なキーを生成)
-    cache_key = f"{llm_settings.provider}_{llm_settings.model_name}_{llm_settings.temperature}_{llm_settings.max_tokens}"
+    cache_key = (
+        f"{llm_settings.provider}_{llm_settings.model_name}_{llm_settings.temperature}_{llm_settings.max_tokens}"
+    )
     _log.debug(f"Calculated cache_key: {cache_key}")
     # APIキーはキャッシュキーに含めない (セキュリティと、キーが変わってもモデル自体は同じ可能性があるため)
 
@@ -78,14 +78,10 @@ def get_llm_client(settings: Settings) -> BaseChatModel:  # 引数を Settings �
     api_key: Optional[SecretStr] = None
     if provider == "openai":
         api_key = settings.openai_api_key
-        _log.debug(
-            f"Provider is openai, api_key loaded: {bool(api_key and api_key.get_secret_value())}"
-        )
+        _log.debug(f"Provider is openai, api_key loaded: {bool(api_key and api_key.get_secret_value())}")
     elif provider == "anthropic":
         api_key = settings.anthropic_api_key
-        _log.debug(
-            f"Provider is anthropic, api_key loaded: {bool(api_key and api_key.get_secret_value())}"
-        )
+        _log.debug(f"Provider is anthropic, api_key loaded: {bool(api_key and api_key.get_secret_value())}")
     # No specific API key for ollama or tavily in this logic block
 
     client: BaseChatModel
@@ -115,9 +111,7 @@ def get_llm_client(settings: Settings) -> BaseChatModel:  # 引数を Settings �
             _log.debug("ChatOpenAI instantiated successfully.")
         except ImportError:
             _log.error("langchain-openai not installed.")
-            raise ImportError(
-                "OpenAIクライアントを使用するには 'langchain-openai' をインストールしてください。"
-            )
+            raise ImportError("OpenAIクライアントを使用するには 'langchain-openai' をインストールしてください。")
         except Exception as e:
             _log.error(f"Error instantiating ChatOpenAI: {e}", exc_info=True)
             raise ValueError(f"OpenAIクライアントの初期化に失敗しました: {e}")
@@ -138,17 +132,13 @@ def get_llm_client(settings: Settings) -> BaseChatModel:  # 引数を Settings �
                 model=model_name,
                 api_key=api_key,  # SecretStr | None を渡す
                 temperature=temperature,
-                max_tokens=max_tokens
-                if max_tokens is not None
-                else 1024,  # Anthropic は max_tokens
+                max_tokens=max_tokens if max_tokens is not None else 1024,  # Anthropic は max_tokens
                 # **extra_params, # 必要に応じて追加パラメータを渡す
             )
             _log.debug("ChatAnthropic instantiated successfully.")
         except ImportError:
             _log.error("langchain-anthropic not installed.")
-            raise ImportError(
-                "Anthropicクライアントを使用するには 'langchain-anthropic' をインストールしてください。"
-            )
+            raise ImportError("Anthropicクライアントを使用するには 'langchain-anthropic' をインストールしてください。")
         except Exception as e:
             _log.error(f"Error instantiating ChatAnthropic: {e}", exc_info=True)
             raise ValueError(f"Anthropicクライアントの初期化に失敗しました: {e}")
@@ -175,9 +165,7 @@ def get_llm_client(settings: Settings) -> BaseChatModel:  # 引数を Settings �
             _log.debug("ChatOllama instantiated successfully.")
         except ImportError:
             _log.error("langchain-community not installed.")
-            raise ImportError(
-                "Ollamaクライアントを使用するには 'langchain-community' をインストールしてください。"
-            )
+            raise ImportError("Ollamaクライアントを使用するには 'langchain-community' をインストールしてください。")
         except Exception as e:
             _log.error(f"Error instantiating ChatOllama: {e}", exc_info=True)
             raise ValueError(f"Ollamaクライアントの初期化に失敗しました: {e}")

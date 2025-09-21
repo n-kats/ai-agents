@@ -60,9 +60,7 @@ class SummarizeMethod(BaseAnalysisMethod):
             map_template_str = load_prompt_template(map_prompt_name)
             self.map_prompt = PromptTemplate.from_template(map_template_str)
         except Exception as e:
-            logger.error(
-                f"Mapプロンプト '{map_prompt_name}.j2' の読み込みに失敗: {e}。デフォルトを使用します。"
-            )
+            logger.error(f"Mapプロンプト '{map_prompt_name}.j2' の読み込みに失敗: {e}。デフォルトを使用します。")
             self.map_prompt = PromptTemplate.from_template(
                 '以下のテキストチャンクの要点を簡潔にまとめてください。\n\nテキスト:\n"{text}"\n\n簡潔な要約:'
             )
@@ -79,9 +77,7 @@ class SummarizeMethod(BaseAnalysisMethod):
             )
 
         # テキスト分割器
-        self.text_splitter = RecursiveCharacterTextSplitter(
-            chunk_size=self.chunk_size, chunk_overlap=self.overlap
-        )
+        self.text_splitter = RecursiveCharacterTextSplitter(chunk_size=self.chunk_size, chunk_overlap=self.overlap)
 
         # 要約チェーンを初期化 (型ヒントを追加)
         self.summarize_chain: Optional[BaseCombineDocumentsChain] = None
@@ -94,9 +90,7 @@ class SummarizeMethod(BaseAnalysisMethod):
                 # document_variable_name="text", # デフォルトに任せてみる
                 verbose=False,  # 必要に応じて True に変更
             )
-            logger.info(
-                f"MapReduce要約チェーン ({map_prompt_name}, {combine_prompt_name}) を初期化しました。"
-            )
+            logger.info(f"MapReduce要約チェーン ({map_prompt_name}, {combine_prompt_name}) を初期化しました。")
         except Exception as e:
             logger.error(f"要約チェーンの初期化に失敗しました: {e}", exc_info=True)
             self.summarize_chain = None
@@ -113,24 +107,16 @@ class SummarizeMethod(BaseAnalysisMethod):
             要約されたテキスト文字列。エラー時はエラーメッセージ文字列。
         """
         if not isinstance(data, str):
-            logger.error(
-                f"メソッド '{self.method_name}' は文字列入力を期待しますが、'{type(data)}' を受け取りました。"
-            )
+            logger.error(f"メソッド '{self.method_name}' は文字列入力を期待しますが、'{type(data)}' を受け取りました。")
             return "エラー: 入力データは文字列である必要があります。"
         if not data.strip():
-            logger.warning(
-                f"メソッド '{self.method_name}': 空の入力データを受け取りました。"
-            )
+            logger.warning(f"メソッド '{self.method_name}': 空の入力データを受け取りました。")
             return "(要約対象データなし)"
         if not self.summarize_chain:
-            logger.error(
-                f"メソッド '{self.method_name}': 要約チェーンが初期化されていません。"
-            )
+            logger.error(f"メソッド '{self.method_name}': 要約チェーンが初期化されていません。")
             return "エラー: 要約チェーンが利用できません。"
 
-        logger.info(
-            f"メソッド '{self.method_name}' を開始します。入力データ長: {len(data)}文字"
-        )
+        logger.info(f"メソッド '{self.method_name}' を開始します。入力データ長: {len(data)}文字")
 
         try:
             # テキストを Document オブジェクトに分割
@@ -149,9 +135,7 @@ class SummarizeMethod(BaseAnalysisMethod):
                 logger.error(f"予期しない要約結果の型: {type(summary)}")
                 return "エラー: 予期しない要約結果の型です。"
 
-            logger.info(
-                f"メソッド '{self.method_name}' が完了しました。要約長: {len(result_text)}文字"
-            )
+            logger.info(f"メソッド '{self.method_name}' が完了しました。要約長: {len(result_text)}文字")
             return result_text.strip()
 
         except Exception as e:

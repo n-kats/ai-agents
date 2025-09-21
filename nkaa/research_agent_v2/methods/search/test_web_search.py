@@ -17,9 +17,7 @@ class TestWebSearchMethod(unittest.TestCase):
 
     def setUp(self):
         """テスト前のセットアップ."""
-        patcher = patch(
-            "nkaa.research_agent_v2.methods.search.web_search.TavilySearchResults"
-        )
+        patcher = patch("nkaa.research_agent_v2.methods.search.web_search.TavilySearchResults")
         self.addCleanup(patcher.stop)
         self.mock_tavily_tool_cls = patcher.start()
         self.mock_tavily_tool_instance = MagicMock(spec=TavilySearchResults)
@@ -73,9 +71,7 @@ class TestWebSearchMethod(unittest.TestCase):
     def test_web_search_method_search_api_error(self):
         """WebSearchMethod の execute メソッド (APIエラー時) のテスト."""
         test_query = "Error query"
-        self.mock_tavily_tool_instance.invoke.side_effect = Exception(
-            "API connection failed"
-        )
+        self.mock_tavily_tool_instance.invoke.side_effect = Exception("API connection failed")
 
         results = self.method.execute(test_query)
 

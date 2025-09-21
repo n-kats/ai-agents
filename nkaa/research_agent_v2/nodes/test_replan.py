@@ -18,9 +18,7 @@ class TestReplanNode(unittest.TestCase):
 
     def setUp(self, mock_load_prompt):
         """テスト前のセットアップ."""
-        mock_load_prompt.return_value = (
-            "リプランプロンプト: {initial_query} {current_query} {report}"
-        )
+        mock_load_prompt.return_value = "リプランプロンプト: {initial_query} {current_query} {report}"
         self.mock_llm_client = MagicMock(spec=BaseChatModel)
         # ReplanNode のインスタンス化
         self.node = ReplanNode(llm_client=self.mock_llm_client)
@@ -55,9 +53,7 @@ class TestReplanNode(unittest.TestCase):
         mock_chain_invoke = MagicMock(return_value=new_query)
 
         # execute 内の chain.invoke をモック
-        with patch.object(
-            self.node.llm_client, "invoke", return_value=mock_llm_response
-        ):  # LLM の戻り値を設定
+        with patch.object(self.node.llm_client, "invoke", return_value=mock_llm_response):  # LLM の戻り値を設定
             # ここでは parser はモックせず、LLM の結果から parser が new_query を返すことを期待
             # もし parser のロジックが複雑なら parser もモックする
             # 簡単のため、chain 全体の invoke をモックする方が楽かもしれない
@@ -86,9 +82,7 @@ class TestReplanNode(unittest.TestCase):
                 self.assertIsNone(result_state["error_info"])
                 # フラグとカウンターの確認
                 self.assertFalse(result_state["replan_needed"])
-                self.assertEqual(
-                    result_state["replan_attempts"], 1
-                )  # インクリメントされている
+                self.assertEqual(result_state["replan_attempts"], 1)  # インクリメントされている
 
     def test_replan_node_error_handling(self, mock_load_prompt):
         """LLM呼び出し (chain.invoke) でエラーが発生した場合のテスト."""
@@ -96,9 +90,7 @@ class TestReplanNode(unittest.TestCase):
         error_message = "LLM Replan failed"
         mock_chain_invoke = MagicMock(side_effect=Exception(error_message))
 
-        with patch(
-            "langchain_core.runnables.base.RunnableSequence.invoke", mock_chain_invoke
-        ):
+        with patch("langchain_core.runnables.base.RunnableSequence.invoke", mock_chain_invoke):
             result_state = self.node(initial_state)
 
             # 検証
@@ -114,22 +106,16 @@ class TestReplanNode(unittest.TestCase):
         initial_state = self._get_initial_state(replan_needed=False)
         mock_chain_invoke = MagicMock()
 
-        with patch(
-            "langchain_core.runnables.base.RunnableSequence.invoke", mock_chain_invoke
-        ):
+        with patch("langchain_core.runnables.base.RunnableSequence.invoke", mock_chain_invoke):
             result_state = self.node(initial_state)
 
             # 検証
             mock_chain_invoke.assert_not_called()  # invoke は呼ばれない
             # 状態が変わっていないことを確認 (比較のためコピーを使うべきだったが、ここでは主要なものを確認)
-            self.assertEqual(
-                result_state["current_query"], initial_state["current_query"]
-            )
+            self.assertEqual(result_state["current_query"], initial_state["current_query"])
             self.assertFalse(result_state["replan_needed"])
             self.assertIsNone(result_state["error_info"])
-            self.assertEqual(
-                result_state["replan_attempts"], initial_state["replan_attempts"]
-            )
+            self.assertEqual(result_state["replan_attempts"], initial_state["replan_attempts"])
 
     def test_replan_node_empty_query(self, mock_load_prompt):
         """LLM が空のクエリを返した場合のテスト."""
@@ -137,17 +123,13 @@ class TestReplanNode(unittest.TestCase):
         empty_query = "  "  # 空白のみ
         mock_chain_invoke = MagicMock(return_value=empty_query)
 
-        with patch(
-            "langchain_core.runnables.base.RunnableSequence.invoke", mock_chain_invoke
-        ):
+        with patch("langchain_core.runnables.base.RunnableSequence.invoke", mock_chain_invoke):
             result_state = self.node(initial_state)
 
             # 検証
             mock_chain_invoke.assert_called_once()
             # current_query は元のままのはず
-            self.assertEqual(
-                result_state["current_query"], initial_state["current_query"]
-            )
+            self.assertEqual(result_state["current_query"], initial_state["current_query"])
             self.assertFalse(result_state["replan_needed"])  # 試行はしたので False
             self.assertIsNone(result_state["error_info"])
             self.assertEqual(result_state["replan_attempts"], 1)  # 試行回数は増える

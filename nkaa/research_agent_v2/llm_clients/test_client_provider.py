@@ -34,9 +34,7 @@ class TestClientProvider(unittest.TestCase):
         mock_chat_openai.return_value = mock_instance
         # Settings オブジェクト全体を準備
         settings = Settings(
-            llm=LLMSettings(
-                provider="openai", model_name="gpt-4o", temperature=0.7, max_tokens=1000
-            ),
+            llm=LLMSettings(provider="openai", model_name="gpt-4o", temperature=0.7, max_tokens=1000),
             openai_api_key=SecretStr("fake_openai_key"),  # Settings 経由でキーを渡す
         )
 
@@ -115,21 +113,15 @@ class TestClientProvider(unittest.TestCase):
     def test_get_llm_client_unsupported_provider(self, mock_get_llm_client):
         """サポートされていないプロバイダーが指定された場合のテスト (関数自体をモック)."""
         # get_llm_client が ValueError を送出するように設定
-        mock_get_llm_client.side_effect = ValueError(
-            "サポートされていないLLMプロバイダーです: unsupported"
-        )
+        mock_get_llm_client.side_effect = ValueError("サポートされていないLLMプロバイダーです: unsupported")
 
         # Settings オブジェクトはダミーで良い
-        settings = Settings(
-            llm=LLMSettings(provider="unsupported", model_name="some-model")
-        )
+        settings = Settings(llm=LLMSettings(provider="unsupported", model_name="some-model"))
         # print 文は不要
 
         with self.assertRaises(ValueError) as cm:
             client_provider.get_llm_client(settings)
-        self.assertIn(
-            "サポートされていないLLMプロバイダーです: unsupported", str(cm.exception)
-        )
+        self.assertIn("サポートされていないLLMプロバイダーです: unsupported", str(cm.exception))
         mock_get_llm_client.assert_called_once_with(settings)
 
     # @patch.dict(os.environ, {}, clear=True) # 環境変数のパッチは不要になる
@@ -137,9 +129,7 @@ class TestClientProvider(unittest.TestCase):
     def test_get_llm_client_missing_api_key_openai(self, mock_get_llm_client):
         """OpenAI で API キーがない場合に ValueError が発生するかのテスト (関数自体をモック)."""
         # get_llm_client が ValueError を送出するように設定
-        mock_get_llm_client.side_effect = ValueError(
-            "OpenAI APIキーが設定されていません"
-        )
+        mock_get_llm_client.side_effect = ValueError("OpenAI APIキーが設定されていません")
 
         # Settings オブジェクトはダミーで良い（実際には使われない）
         settings = Settings(
@@ -160,9 +150,7 @@ class TestClientProvider(unittest.TestCase):
     def test_get_llm_client_missing_api_key_anthropic(self, mock_get_llm_client):
         """Anthropic で API キーがない場合に ValueError が発生するかのテスト (関数自体をモック)."""
         # get_llm_client が ValueError を送出するように設定
-        mock_get_llm_client.side_effect = ValueError(
-            "Anthropic APIキーが設定されていません"
-        )
+        mock_get_llm_client.side_effect = ValueError("Anthropic APIキーが設定されていません")
 
         # Settings オブジェクトはダミーで良い
         settings = Settings(

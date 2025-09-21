@@ -29,17 +29,11 @@ def create_should_replan_condition(settings: Settings):
         replan_needed = state.get("replan_needed", False)
         if replan_needed:
             max_attempts = settings.max_replan_attempts
-            current_attempts = state.get(
-                "replan_attempts", 0
-            )  # ReplanNode でインクリメントされているはず
+            current_attempts = state.get("replan_attempts", 0)  # ReplanNode でインクリメントされているはず
             if current_attempts >= max_attempts:
-                logger.warning(
-                    f"再計画の最大試行回数({max_attempts})に達しました。処理を終了します。"
-                )
+                logger.warning(f"再計画の最大試行回数({max_attempts})に達しました。処理を終了します。")
                 return "finish"
-            logger.info(
-                f"最終チェック不合格、再計画を実行します (試行 {current_attempts + 1}/{max_attempts})。"
-            )
+            logger.info(f"最終チェック不合格、再計画を実行します (試行 {current_attempts + 1}/{max_attempts})。")
             return "replan"
         else:
             logger.info("最終チェックに合格したため、処理を終了します。")
@@ -74,9 +68,7 @@ def build_graph(
     workflow = StateGraph(AgentState)
 
     # 1. ノードを追加
-    workflow.add_node(
-        data_gathering_node.node_name, data_gathering_node
-    )  # __call__ を使う
+    workflow.add_node(data_gathering_node.node_name, data_gathering_node)  # __call__ を使う
     workflow.add_node(analysis_synthesis_node.node_name, analysis_synthesis_node)
     workflow.add_node(final_check_node.node_name, final_check_node)
     workflow.add_node(replan_node.node_name, replan_node)

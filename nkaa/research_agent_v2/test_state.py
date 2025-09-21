@@ -56,9 +56,7 @@ class TestState(unittest.TestCase):
     def test_agent_state_structure_and_types(self):
         """AgentState (TypedDict) の構造と基本的な型が期待通りかのテスト."""
         # サンプルデータを作成
-        sample_error = StructuredError(
-            node_name="sample_node", error_code="SampleError", message="Sample"
-        )
+        sample_error = StructuredError(node_name="sample_node", error_code="SampleError", message="Sample")
         state: AgentState = {
             "initial_query": "initial",
             "current_query": "current",
@@ -91,24 +89,13 @@ class TestState(unittest.TestCase):
         # 簡単な型チェック
         self.assertIsInstance(state["initial_query"], str)
         self.assertIsInstance(state["current_query"], str)
-        self.assertTrue(
-            isinstance(state["search_plan"], list) or state["search_plan"] is None
-        )
+        self.assertTrue(isinstance(state["search_plan"], list) or state["search_plan"] is None)
         self.assertIsInstance(state["search_results"], list)
         self.assertIsInstance(state["analysis_results"], dict)
-        self.assertTrue(
-            isinstance(state["synthesis_result"], str)
-            or state["synthesis_result"] is None
-        )
-        self.assertTrue(
-            isinstance(state["final_check_passed"], bool)
-            or state["final_check_passed"] is None
-        )
+        self.assertTrue(isinstance(state["synthesis_result"], str) or state["synthesis_result"] is None)
+        self.assertTrue(isinstance(state["final_check_passed"], bool) or state["final_check_passed"] is None)
         self.assertIsInstance(state["replan_needed"], bool)
-        self.assertTrue(
-            isinstance(state["error_info"], StructuredError)
-            or state["error_info"] is None
-        )
+        self.assertTrue(isinstance(state["error_info"], StructuredError) or state["error_info"] is None)
         self.assertIsInstance(state["replan_attempts"], int)
 
         # error_info が None の場合もテスト

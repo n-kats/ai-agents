@@ -21,17 +21,13 @@ load_dotenv()
 # nodes モジュールは直接使用しないが、AgentState の型定義などで間接的に参照されるため import は維持する
 # from .nodes import AnalysisSynthesisAgent, DataGatheringAgent
 
-logging.basicConfig(
-    level=logging.INFO, format="%(asctime)s - %(levelname)s - %(message)s"
-)
+logging.basicConfig(level=logging.INFO, format="%(asctime)s - %(levelname)s - %(message)s")
 
 
 def main():
     """メイン関数: グラフを構築し、実行する。"""
     parser = argparse.ArgumentParser(description="Research Agent v1")
-    parser.add_argument(
-        "-q", "--query", type=str, help="The question to ask the agent.", required=False
-    )
+    parser.add_argument("-q", "--query", type=str, help="The question to ask the agent.", required=False)
     parser.add_argument(
         "--max-retries",
         type=int,
@@ -111,15 +107,11 @@ def main():
             # 出力先ディレクトリを作成
             os.makedirs(os.path.dirname(output_path), exist_ok=True)
             with open(output_path, "w", encoding="utf-8") as json_file:
-                json.dump(
-                    final_state_accumulator, json_file, ensure_ascii=False, indent=4
-                )
+                json.dump(final_state_accumulator, json_file, ensure_ascii=False, indent=4)
             logging.info(f"詳細な調査結果が {output_path} に保存されました。")
 
             if final_state_accumulator.get("error"):
-                logging.error(
-                    f"\nFinal Error State: {final_state_accumulator['error']}"
-                )
+                logging.error(f"\nFinal Error State: {final_state_accumulator['error']}")
 
         except Exception as e:
             logging.error(f"\nError during graph execution: {e}", exc_info=True)
@@ -137,9 +129,7 @@ def main():
             logging.info(f"\nGraph visualization saved to {args.graph_png}")
         except ImportError:
             # 依存ライブラリがない場合は警告を表示し、可視化をスキップする
-            logging.warning(
-                "\nInstall graphviz and pygraphviz to visualize the graph. Skipping visualization."
-            )
+            logging.warning("\nInstall graphviz and pygraphviz to visualize the graph. Skipping visualization.")
         except Exception as e:
             logging.error(f"\nError generating graph visualization: {e}", exc_info=True)
 

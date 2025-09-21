@@ -20,23 +20,17 @@ class TestSummarizeMethod(unittest.TestCase):
     @patch(
         "nkaa.research_agent_v2.methods.analysis.summarize.load_summarize_chain"
     )  # 外側 -> 第2引数 (mock_load_chain)
-    @patch(
-        "nkaa.research_agent_v2.utils.prompt_loader.load_prompt_template"
-    )  # 内側 -> 第1引数 (mock_load_prompt)
+    @patch("nkaa.research_agent_v2.utils.prompt_loader.load_prompt_template")  # 内側 -> 第1引数 (mock_load_prompt)
     def setUp(self, mock_load_prompt, mock_load_chain):
         """テスト前のセットアップ."""
-        mock_load_prompt.side_effect = (
-            lambda name: f"Mock {name} content"
-        )  # ダミープロンプト内容
+        mock_load_prompt.side_effect = lambda name: f"Mock {name} content"  # ダミープロンプト内容
         self.mock_llm_client = MagicMock(spec=BaseChatModel)
         self.settings = {"chunk_size": 100, "overlap": 10}  # テスト用に小さい値
         # load_summarize_chain が返すモックチェーンを設定
         self.mock_summarize_chain = MagicMock()
         mock_load_chain.return_value = self.mock_summarize_chain
 
-        self.method = SummarizeMethod(
-            llm_client=self.mock_llm_client, settings=self.settings
-        )
+        self.method = SummarizeMethod(llm_client=self.mock_llm_client, settings=self.settings)
         # チェーンが正しく初期化されているか確認
         self.assertEqual(self.method.summarize_chain, self.mock_summarize_chain)
         # load_summarize_chain が呼ばれたか確認
@@ -52,9 +46,7 @@ class TestSummarizeMethod(unittest.TestCase):
         """SummarizeMethod の analyze メソッド (短いコンテンツ) のテスト."""
         short_content = "This is a short text, less than chunk size."
         expected_summary = "short summary"
-        self.mock_summarize_chain.invoke.return_value = {
-            "output_text": expected_summary
-        }
+        self.mock_summarize_chain.invoke.return_value = {"output_text": expected_summary}
 
         summary = self.method.execute(short_content)
 
@@ -74,9 +66,7 @@ class TestSummarizeMethod(unittest.TestCase):
         # chunk_size=100, overlap=10 なので、200文字あれば複数チャンクになるはず
         long_content = ("This is a long text. " * 15) + "End."
         expected_summary = "long combined summary"
-        self.mock_summarize_chain.invoke.return_value = {
-            "output_text": expected_summary
-        }
+        self.mock_summarize_chain.invoke.return_value = {"output_text": expected_summary}
 
         summary = self.method.execute(long_content)
 

@@ -48,9 +48,7 @@ class ReplanNode(BaseNode):
             self.replan_prompt = ChatPromptTemplate.from_template(prompt_template_str)
             logger.info(f"プロンプト '{replan_prompt_name}.j2' を読み込みました。")
         except FileNotFoundError:
-            logger.error(
-                f"再計画プロンプトファイル '{replan_prompt_name}.j2' が見つかりません。"
-            )
+            logger.error(f"再計画プロンプトファイル '{replan_prompt_name}.j2' が見つかりません。")
             self.replan_prompt = ChatPromptTemplate.from_template(
                 "エラー: 再計画プロンプトが見つかりません。初期クエリ: {initial_query}"
             )
@@ -77,26 +75,18 @@ class ReplanNode(BaseNode):
         """
         initial_query = state.get("initial_query")
         current_query = state.get("current_query")
-        report = state.get(
-            "synthesis_result", "(レポートなし)"
-        )  # レポートがない場合も考慮
+        report = state.get("synthesis_result", "(レポートなし)")  # レポートがない場合も考慮
 
         if not initial_query:
-            return self._handle_error(
-                state, "MissingInput", "初期クエリが state に存在しません。"
-            )
+            return self._handle_error(state, "MissingInput", "初期クエリが state に存在しません。")
         if not current_query:
             # current_query がない場合は initial_query を使う
             current_query = initial_query
-            logger.warning(
-                "current_query が見つからないため、initial_query を使用します。"
-            )
+            logger.warning("current_query が見つからないため、initial_query を使用します。")
 
         # 再計画が必要かどうかのチェック (グラフの条件分岐で制御されるはずだが念のため)
         if not state.get("replan_needed", False):
-            logger.info(
-                f"ノード '{self.node_name}': 再計画は不要と判断されました。スキップします。"
-            )
+            logger.info(f"ノード '{self.node_name}': 再計画は不要と判断されました。スキップします。")
             # replan_needed が False の場合、何もせず state を返すか、エラーにするか検討
             # ここでは何もせず返す
             return state
@@ -106,9 +96,7 @@ class ReplanNode(BaseNode):
         state["replan_attempts"] = current_attempts + 1
         logger.info(f"再計画試行回数: {state['replan_attempts']}")
 
-        logger.info(
-            f"ノード '{self.node_name}' を開始します。検索クエリの再計画を行います..."
-        )
+        logger.info(f"ノード '{self.node_name}' を開始します。検索クエリの再計画を行います...")
 
         try:
             chain = self.replan_prompt | self.llm_client | self.output_parser
@@ -120,9 +108,7 @@ class ReplanNode(BaseNode):
             new_query = chain.invoke(replan_input).strip()
 
             if not new_query:
-                logger.warning(
-                    "LLMが新しいクエリを生成できませんでした。元のクエリを維持します。"
-                )
+                logger.warning("LLMが新しいクエリを生成できませんでした。元のクエリを維持します。")
                 # 新しいクエリが空の場合、エラーにするか、元のクエリを維持するか選択
                 # ここでは元のクエリを維持し、エラーとはしない
                 state["replan_needed"] = False  # 再計画試行はしたので False にする

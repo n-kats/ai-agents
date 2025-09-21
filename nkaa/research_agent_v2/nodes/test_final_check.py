@@ -17,9 +17,7 @@ class TestFinalCheckNode(unittest.TestCase):
 
     def setUp(self):
         """テスト前のセットアップ."""
-        patcher = patch(
-            "nkaa.research_agent_v2.utils.prompt_loader.load_prompt_template"
-        )
+        patcher = patch("nkaa.research_agent_v2.utils.prompt_loader.load_prompt_template")
         self.mock_load_prompt = patcher.start()
         self.addCleanup(patcher.stop)
         self.mock_load_prompt.return_value = "チェックプロンプト: {query} {report}"
@@ -50,21 +48,15 @@ class TestFinalCheckNode(unittest.TestCase):
             "replan_attempts": 0,
         }
 
-    @patch(
-        "nkaa.research_agent_v2.nodes.final_check.ChatPromptTemplate"
-    )  # チェーン構築を阻止
+    @patch("nkaa.research_agent_v2.nodes.final_check.ChatPromptTemplate")  # チェーン構築を阻止
     @patch("nkaa.research_agent_v2.nodes.final_check.BooleanOutputParser")
     def test_final_check_node_call_passed(self, mock_parser_cls, mock_prompt_cls):
         """FinalCheckNode の __call__ メソッド (チェック通過) のテスト."""
-        initial_state = self._get_initial_state(
-            report="Good report", query="test query"
-        )
+        initial_state = self._get_initial_state(report="Good report", query="test query")
         mock_chain_invoke = MagicMock(return_value=True)  # チェック結果 True
 
         # execute 内の chain.invoke をモック
-        with patch.object(
-            self.node.llm_client, "invoke", mock_chain_invoke
-        ):  # llm_client.invoke を直接モック
+        with patch.object(self.node.llm_client, "invoke", mock_chain_invoke):  # llm_client.invoke を直接モック
             # パーサーもモック (llm_client の結果をそのまま使うため)
             mock_parser_instance = MagicMock()
             mock_parser_instance.parse.return_value = True
@@ -148,9 +140,7 @@ class TestFinalCheckNode(unittest.TestCase):
         mock_llm_response.content = "maybe"  # パースできない応答
         self.mock_llm_client.invoke.return_value = mock_llm_response
         mock_parser_instance = MagicMock()
-        mock_parser_instance.parse.side_effect = ValueError(
-            "Cannot parse"
-        )  # パースエラー
+        mock_parser_instance.parse.side_effect = ValueError("Cannot parse")  # パースエラー
         mock_parser_cls.return_value = mock_parser_instance
         mock_prompt_cls.from_template.return_value = MagicMock()  # プロンプトモック
 
@@ -175,12 +165,8 @@ class TestFinalCheckNode(unittest.TestCase):
         # クエリなし
         state_no_query = self._get_initial_state(query=None)
         result_no_query = self.node(state_no_query)
-        self.assertIsNone(
-            result_no_query["final_check_passed"]
-        )  # チェック実行前にエラー
-        self.assertFalse(
-            result_no_query["replan_needed"]
-        )  # エラーなので再計画フラグはそのまま
+        self.assertIsNone(result_no_query["final_check_passed"])  # チェック実行前にエラー
+        self.assertFalse(result_no_query["replan_needed"])  # エラーなので再計画フラグはそのまま
         self.assertIsInstance(result_no_query["error_info"], StructuredError)
         self.assertEqual(result_no_query["error_info"].error_code, "MissingInput")
 

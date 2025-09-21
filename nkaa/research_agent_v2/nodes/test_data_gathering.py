@@ -84,27 +84,19 @@ class TestDataGatheringNode(unittest.TestCase):
             "replan_attempts": 0,
         }
         error_message = "Web search failed"
-        self.mock_web_search.side_effect = Exception(
-            error_message
-        )  # web_search でエラー
-        self.mock_local_search.return_value = [
-            {"content": "local"}
-        ]  # local_search は呼ばれないはず
+        self.mock_web_search.side_effect = Exception(error_message)  # web_search でエラー
+        self.mock_local_search.return_value = [{"content": "local"}]  # local_search は呼ばれないはず
 
         # 実行
         result_state = self.node(initial_state)
 
         # 検証
-        self.mock_web_search.assert_called_once_with(
-            query="test query"
-        )  # web_search は呼ばれる
+        self.mock_web_search.assert_called_once_with(query="test query")  # web_search は呼ばれる
         self.mock_local_search.assert_not_called()  # local_search は呼ばれない
 
         self.assertIsInstance(result_state["error_info"], StructuredError)
         self.assertEqual(result_state["error_info"].node_name, "data_gathering")
-        self.assertEqual(
-            result_state["error_info"].error_code, "Web_searchError"
-        )  # メソッド名から生成
+        self.assertEqual(result_state["error_info"].error_code, "Web_searchError")  # メソッド名から生成
         self.assertIn(error_message, result_state["error_info"].message)
         # search_results は空のままのはず
         self.assertEqual(result_state["search_results"], [])

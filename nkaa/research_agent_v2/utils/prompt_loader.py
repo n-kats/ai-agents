@@ -35,9 +35,7 @@ def load_prompt_template(template_name: str) -> str:
 
     if not filepath.is_file():
         logger.error(f"プロンプトテンプレートファイルが見つかりません: {filepath}")
-        raise FileNotFoundError(
-            f"プロンプトテンプレートファイルが見つかりません: {filepath}"
-        )
+        raise FileNotFoundError(f"プロンプトテンプレートファイルが見つかりません: {filepath}")
 
     try:
         with open(filepath, "r", encoding="utf-8") as f:

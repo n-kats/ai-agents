@@ -20,9 +20,7 @@ class DataGatheringNode(BaseNode):
 
     def __init__(
         self,
-        search_methods: Sequence[
-            BaseSearchMethod
-        ],  # DI: 有効な検索メソッドのインスタンスリスト
+        search_methods: Sequence[BaseSearchMethod],  # DI: 有効な検索メソッドのインスタンスリスト
         # settings: Settings, # DI: アプリケーション設定
         **kwargs: Any,
     ):
@@ -37,9 +35,7 @@ class DataGatheringNode(BaseNode):
         self.search_methods = search_methods
         # self.settings = settings
         if not search_methods:
-            logger.warning(
-                f"ノード '{self.node_name}' に検索メソッドが指定されていません。"
-            )
+            logger.warning(f"ノード '{self.node_name}' に検索メソッドが指定されていません。")
 
     def execute(self, state: AgentState) -> AgentState:
         """
@@ -53,14 +49,10 @@ class DataGatheringNode(BaseNode):
         """
         query = state.get("current_query")
         if not query:
-            return self._handle_error(
-                state, "MissingInput", "検索クエリが state に存在しません。"
-            )
+            return self._handle_error(state, "MissingInput", "検索クエリが state に存在しません。")
 
         if not self.search_methods:
-            logger.warning(
-                f"ノード '{self.node_name}' で実行する検索メソッドがありません。"
-            )
+            logger.warning(f"ノード '{self.node_name}' で実行する検索メソッドがありません。")
             state["search_results"] = []
             return state
 
@@ -74,9 +66,7 @@ class DataGatheringNode(BaseNode):
                 # ここでメソッド固有のパラメータを渡すことも可能 (settings から取得するなど)
                 # 例: num_results = self.settings.get_method_param(method_name, 'num_results', 5)
                 results = method(query=query)  # __call__ を利用
-                logger.info(
-                    f"検索メソッド '{method_name}' が {len(results)} 件の結果を返しました。"
-                )
+                logger.info(f"検索メソッド '{method_name}' が {len(results)} 件の結果を返しました。")
                 # 各結果にメソッド名を付与するなど、後処理が必要な場合がある
                 for res in results:
                     res["search_method"] = method_name  # どのメソッドからの結果か追跡

@@ -50,9 +50,7 @@ class AnalysisSynthesisNode(BaseNode):
         try:
             # プロンプトテンプレートをファイルから読み込む
             prompt_template_str = load_prompt_template(synthesis_prompt_name)
-            self.synthesis_prompt = ChatPromptTemplate.from_template(
-                prompt_template_str
-            )
+            self.synthesis_prompt = ChatPromptTemplate.from_template(prompt_template_str)
             logger.info(f"プロンプト '{synthesis_prompt_name}.j2' を読み込みました。")
         except FileNotFoundError:
             logger.error(
@@ -75,13 +73,9 @@ class AnalysisSynthesisNode(BaseNode):
         self.output_parser = StrOutputParser()
 
         if not analysis_methods:
-            logger.warning(
-                f"ノード '{self.node_name}' に分析メソッドが指定されていません。"
-            )
+            logger.warning(f"ノード '{self.node_name}' に分析メソッドが指定されていません。")
 
-    def _format_search_results_summary(
-        self, search_results: List[Dict[str, Any]], max_items: int = 5
-    ) -> str:
+    def _format_search_results_summary(self, search_results: List[Dict[str, Any]], max_items: int = 5) -> str:
         """検索結果を要約してプロンプトに含めるためのヘルパー"""
         if not search_results:
             return "検索結果なし"
@@ -89,9 +83,7 @@ class AnalysisSynthesisNode(BaseNode):
         for i, res in enumerate(search_results[:max_items]):
             source = res.get("source", "不明")
             title = res.get("title", res.get("path", "タイトル不明"))
-            snippet = res.get(
-                "snippet", res.get("content", "")[:100]
-            )  # スニペットかコンテンツの先頭
+            snippet = res.get("snippet", res.get("content", "")[:100])  # スニペットかコンテンツの先頭
             summary.append(f"{i + 1}. [{source}] {title}\n   {snippet}...")
         if len(search_results) > max_items:
             summary.append(f"...他{len(search_results) - max_items}件")
@@ -111,27 +103,17 @@ class AnalysisSynthesisNode(BaseNode):
         query = state.get("current_query")
 
         if search_results is None:  # 空リスト[] はOKとする
-            return self._handle_error(
-                state, "MissingInput", "検索結果が state に存在しません。"
-            )
+            return self._handle_error(state, "MissingInput", "検索結果が state に存在しません。")
         if not query:
-            return self._handle_error(
-                state, "MissingInput", "現在のクエリが state に存在しません。"
-            )
+            return self._handle_error(state, "MissingInput", "現在のクエリが state に存在しません。")
 
         if not self.analysis_methods:
-            logger.warning(
-                f"ノード '{self.node_name}' で実行する分析メソッドがありません。"
-            )
+            logger.warning(f"ノード '{self.node_name}' で実行する分析メソッドがありません。")
             state["analysis_results"] = {}
-            state["synthesis_result"] = (
-                "分析メソッドが設定されていないため、レポートを生成できませんでした。"
-            )
+            state["synthesis_result"] = "分析メソッドが設定されていないため、レポートを生成できませんでした。"
             return state
 
-        logger.info(
-            f"ノード '{self.node_name}' を開始します。検索結果: {len(search_results)}件"
-        )
+        logger.info(f"ノード '{self.node_name}' を開始します。検索結果: {len(search_results)}件")
 
         analysis_outputs: Dict[str, Any] = {}
         # 分析対象データを作成 (例: 全検索結果のコンテンツを結合)
@@ -146,9 +128,7 @@ class AnalysisSynthesisNode(BaseNode):
 
         if not analysis_input_data:
             logger.warning("分析対象となるコンテンツを持つ検索結果がありませんでした。")
-            analysis_input_data = (
-                "(分析対象データなし)"  # 分析メソッドには空でないことを示す
-            )
+            analysis_input_data = "(分析対象データなし)"  # 分析メソッドには空でないことを示す
 
         for method in self.analysis_methods:
             method_name = method.method_name
@@ -179,12 +159,8 @@ class AnalysisSynthesisNode(BaseNode):
             chain = self.synthesis_prompt | self.llm_client | self.output_parser
             synthesis_input = {
                 "query": query,
-                "analysis_results": "\n".join(
-                    [f"- {k}: {v}" for k, v in analysis_outputs.items()]
-                ),
-                "search_results_summary": self._format_search_results_summary(
-                    search_results
-                ),
+                "analysis_results": "\n".join([f"- {k}: {v}" for k, v in analysis_outputs.items()]),
+                "search_results_summary": self._format_search_results_summary(search_results),
             }
             synthesis_result = chain.invoke(synthesis_input)
             state["synthesis_result"] = synthesis_result

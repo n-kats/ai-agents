@@ -30,9 +30,7 @@ from pydantic_settings import (
 class WebSearchSettings(BaseModel):
     """Web検索メソッド固有の設定"""
 
-    provider: str = Field(
-        "tavily", description="使用するWeb検索プロバイダー (例: tavily, google)"
-    )
+    provider: str = Field("tavily", description="使用するWeb検索プロバイダー (例: tavily, google)")
     # APIキーは環境変数 (TAVILY_API_KEY など) から読み込むことを推奨するため、モデルからは削除しても良い
     # api_key: Optional[str] = Field(None, description="Web検索APIキー")
     num_results: int = Field(5, description="取得する検索結果の数")
@@ -41,18 +39,14 @@ class WebSearchSettings(BaseModel):
 class LocalSearchSettings(BaseModel):
     """ローカル検索メソッド固有の設定"""
 
-    target_directory: DirectoryPath = Field(
-        ..., description="検索対象のディレクトリパス"
-    )
+    target_directory: DirectoryPath = Field(..., description="検索対象のディレクトリパス")
     # allowed_extensions は現在 LocalSearchMethod で直接使用されていないためコメントアウト
     # allowed_extensions: List[str] = Field(
     #     [".md", ".txt", ".py"], description="検索対象のファイル拡張子リスト"
     # )
     # recursive も LocalSearchMethod で True 固定のためコメントアウト
     # recursive: bool = Field(True, description="サブディレクトリも再帰的に検索するかどうか")
-    file_pattern: str = Field(
-        "*.*", description="検索するファイルパターン"
-    )  # file_pattern を追加
+    file_pattern: str = Field("*.*", description="検索するファイルパターン")  # file_pattern を追加
 
 
 class SummarizeSettings(BaseModel):
@@ -132,19 +126,13 @@ AnyAnalysisMethodConfig = Annotated[
 class LLMSettings(BaseModel):
     """LLMクライアント関連の設定"""
 
-    provider: str = Field(
-        "openai", description="使用するLLMプロバイダー (例: openai, anthropic, ollama)"
-    )
+    provider: str = Field("openai", description="使用するLLMプロバイダー (例: openai, anthropic, ollama)")
     model_name: str = Field("gpt-4o", description="使用するモデル名")
     # APIキーは環境変数 (OPENAI_API_KEY など) から読み込むことを推奨
     # api_key: Optional[str] = Field(None, description="LLM APIキー")
-    temperature: float = Field(
-        0.7, ge=0.0, le=1.0, description="生成時の温度パラメータ"
-    )
+    temperature: float = Field(0.7, ge=0.0, le=1.0, description="生成時の温度パラメータ")
     max_tokens: Optional[int] = Field(None, description="最大生成トークン数")
-    extra_params: Optional[Dict[str, Any]] = Field(
-        None, description="プロバイダー固有の追加パラメータ"
-    )
+    extra_params: Optional[Dict[str, Any]] = Field(None, description="プロバイダー固有の追加パラメータ")
 
 
 class Settings(BaseSettings):
@@ -180,18 +168,14 @@ class Settings(BaseSettings):
             # Pydantic モデルのデフォルト値は自動的に最後に適用される
         )
 
-    log_level: str = Field(
-        "INFO", description="ログレベル (DEBUG, INFO, WARNING, ERROR, CRITICAL)"
-    )
+    log_level: str = Field("INFO", description="ログレベル (DEBUG, INFO, WARNING, ERROR, CRITICAL)")
 
     # default_factory を削除し、Pydantic のデフォルト生成に任せる
     llm: LLMSettings = Field(description="LLM設定")
 
     # 型ヒントを判別可能な Union 型に変更
     # デフォルト値を明示的に空リスト [] に変更
-    search_methods: List[AnySearchMethodConfig] = Field(
-        default=[], description="使用する検索メソッドのリストと設定"
-    )
+    search_methods: List[AnySearchMethodConfig] = Field(default=[], description="使用する検索メソッドのリストと設定")
     analysis_methods: List[AnyAnalysisMethodConfig] = Field(
         default=[], description="使用する分析メソッドのリストと設定"
     )
@@ -216,9 +200,7 @@ class Settings(BaseSettings):
 _settings_instance: Optional[Settings] = None
 
 
-def load_settings(
-    config_path: str = "config.yaml", force_reload: bool = False
-) -> Settings:
+def load_settings(config_path: str = "config.yaml", force_reload: bool = False) -> Settings:
     """
     設定を読み込み、Settingsオブジェクトを生成またはキャッシュから返す。
     優先度: 環境変数 > YAMLファイル > .envファイル > デフォルト値
@@ -234,15 +216,12 @@ def load_settings(
     """
     global _settings_instance
     if _settings_instance is None or force_reload:
-        yaml_file_path = Settings.model_config.get(
-            "yaml_file", config_path
-        )  # 設定クラスからパス取得試行
+        yaml_file_path = Settings.model_config.get("yaml_file", config_path)  # 設定クラスからパス取得試行
 
         # YAML ファイルの存在確認 (オプション)
         if isinstance(yaml_file_path, str) and not os.path.exists(yaml_file_path):
             logging.warning(
-                f"設定ファイル '{yaml_file_path}' が見つかりません。"
-                "環境変数、.env、デフォルト値のみを使用します。"
+                f"設定ファイル '{yaml_file_path}' が見つかりません。環境変数、.env、デフォルト値のみを使用します。"
             )
             # yaml_file が存在しない場合、pydantic-settings はエラーを出さずに無視するはず
 
@@ -257,9 +236,7 @@ def load_settings(
             if _settings_instance.model_config.get("env_file") and os.path.exists(
                 str(_settings_instance.model_config.get("env_file"))
             ):
-                log_sources.append(
-                    f"'{_settings_instance.model_config.get('env_file')}'"
-                )
+                log_sources.append(f"'{_settings_instance.model_config.get('env_file')}'")
             if isinstance(yaml_file_path, str) and os.path.exists(yaml_file_path):
                 log_sources.append(f"'{yaml_file_path}'")
             if os.environ:
@@ -269,49 +246,33 @@ def load_settings(
             # --- デバッグログ (メソッドリストの内容確認) ---
             # customise_sources を使ったので、Settings() 呼び出し時にログ出力しても
             # 全てのソースが読み込まれた後の状態が確認できるはず
-            logging.debug(
-                "--- Settings インスタンス化後の内容 (customise_sources適用後) ---"
-            )
+            logging.debug("--- Settings インスタンス化後の内容 (customise_sources適用後) ---")
             logging.debug(f"  Log Level: {_settings_instance.log_level}")
             logging.debug(f"  LLM Provider: {_settings_instance.llm.provider}")
             logging.debug(f"  LLM Model: {_settings_instance.llm.model_name}")
-            logging.debug(
-                f"  Search Methods (len={len(_settings_instance.search_methods)}):"
-            )
+            logging.debug(f"  Search Methods (len={len(_settings_instance.search_methods)}):")
             # ループを分ける (mypy の型推論補助のため)
             search_method: AnySearchMethodConfig
             for i, search_method in enumerate(_settings_instance.search_methods):
                 logging.debug(
                     f"    [{i}] Name: {search_method.method_name}, Enabled: {search_method.enabled}, Settings: {search_method.settings}"
                 )
-            logging.debug(
-                f"  Analysis Methods (len={len(_settings_instance.analysis_methods)}):"
-            )
+            logging.debug(f"  Analysis Methods (len={len(_settings_instance.analysis_methods)}):")
             analysis_method: AnyAnalysisMethodConfig
             for i, analysis_method in enumerate(_settings_instance.analysis_methods):
                 logging.debug(
                     f"    [{i}] Name: {analysis_method.method_name}, Enabled: {analysis_method.enabled}, Settings: {analysis_method.settings}"
                 )
-            logging.debug(
-                f"  Max Replan Attempts: {_settings_instance.max_replan_attempts}"
-            )
-            logging.debug(
-                f"  OpenAI Key Loaded: {bool(_settings_instance.openai_api_key)}"
-            )
-            logging.debug(
-                f"  Tavily Key Loaded: {bool(_settings_instance.tavily_api_key)}"
-            )
+            logging.debug(f"  Max Replan Attempts: {_settings_instance.max_replan_attempts}")
+            logging.debug(f"  OpenAI Key Loaded: {bool(_settings_instance.openai_api_key)}")
+            logging.debug(f"  Tavily Key Loaded: {bool(_settings_instance.tavily_api_key)}")
             logging.debug("--- デバッグログここまで ---")
 
         except Exception as e:
-            logging.error(
-                f"設定の読み込み中に重大なエラーが発生しました: {e}", exc_info=True
-            )
+            logging.error(f"設定の読み込み中に重大なエラーが発生しました: {e}", exc_info=True)
             # エラー発生時の挙動: 例外を再送出するか、デフォルト設定で続行するか
             # ここでは例外を再送出して、起動時に問題を明確にする
-            raise RuntimeError(
-                "設定ファイルの読み込みまたは検証に失敗しました。"
-            ) from e
+            raise RuntimeError("設定ファイルの読み込みまたは検証に失敗しました。") from e
 
     return _settings_instance
 

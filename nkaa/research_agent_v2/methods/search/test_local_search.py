@@ -33,9 +33,7 @@ class TestLocalSearchMethod(unittest.TestCase):
     @patch("glob.glob")
     @patch("os.path.isfile")
     @patch("builtins.open", new_callable=mock_open, read_data="Mock file content")
-    def test_local_search_method_search_success(
-        self, mock_open_file, mock_isfile, mock_glob
-    ):
+    def test_local_search_method_search_success(self, mock_open_file, mock_isfile, mock_glob):
         """LocalSearchMethod の execute メソッド (成功時) のテスト."""
         mock_file_paths = [
             os.path.join(self.test_dir, "file1.md"),
@@ -54,9 +52,7 @@ class TestLocalSearchMethod(unittest.TestCase):
         expected_glob_path = os.path.join(self.test_dir, self.file_pattern)
         mock_glob.assert_called_once_with(expected_glob_path, recursive=True)
         # isfile が呼ばれたか確認
-        mock_isfile.assert_has_calls(
-            [call(mock_file_paths[0]), call(mock_file_paths[1])]
-        )
+        mock_isfile.assert_has_calls([call(mock_file_paths[0]), call(mock_file_paths[1])])
         # open が呼ばれたか確認
         mock_open_file.assert_has_calls(
             [
@@ -95,9 +91,7 @@ class TestLocalSearchMethod(unittest.TestCase):
     @patch("glob.glob")
     @patch("os.path.isfile")
     @patch("builtins.open", side_effect=IOError("Permission denied"))
-    def test_local_search_method_search_file_read_error(
-        self, mock_open_file, mock_isfile, mock_glob
-    ):
+    def test_local_search_method_search_file_read_error(self, mock_open_file, mock_isfile, mock_glob):
         """LocalSearchMethod の execute メソッド (ファイル読み込みエラー時) のテスト."""
         mock_file_path = os.path.join(self.test_dir, "error.md")
         mock_glob.return_value = [mock_file_path]
@@ -108,9 +102,7 @@ class TestLocalSearchMethod(unittest.TestCase):
         expected_glob_path = os.path.join(self.test_dir, self.file_pattern)
         mock_glob.assert_called_once_with(expected_glob_path, recursive=True)
         mock_isfile.assert_called_once_with(mock_file_path)
-        mock_open_file.assert_called_once_with(
-            mock_file_path, "r", encoding=self.encoding
-        )
+        mock_open_file.assert_called_once_with(mock_file_path, "r", encoding=self.encoding)
         self.assertEqual(results, [])  # エラーファイルは結果に含まれない
 
 
