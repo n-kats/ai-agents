@@ -64,7 +64,7 @@ class AgentConfig(BaseModel):
     id: str
 
     def build(self) -> BaseAgent:
-        """Instantiate the concrete agent defined by this configuration."""
+        """この設定で定義された具体的なエージェントを生成する。"""
         raise NotImplementedError("AgentConfig.build must be implemented by subclasses")
 
 

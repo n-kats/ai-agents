@@ -6,23 +6,24 @@ from typing import Callable, Literal, Type
 from pydantic import BaseModel
 
 from nkaa.framework.agent import AgentConfig, BaseAgent, BaseTools, StandardManager, StandardManagerConfig
+from nkaa.framework.persistence import JsonLinesStateMixin
 from nkaa.presets.tools.llm_tool import LLMCallTool
 
 
 class LogTool:
     def debug(self, message: str) -> None:
         """
-        Log a debug message.
+        デバッグメッセージを記録する。
         Args:
-            message (str): The message to log.
+            message (str): 記録するメッセージ。
         """
         print(f"DEBUG: {message}")
 
     def info(self, message: str) -> None:
         """
-        Log an info message.
+        情報レベルのメッセージを記録する。
         Args:
-            message (str): The message to log.
+            message (str): 記録するメッセージ。
         """
         print(f"INFO: {message}")
 
@@ -30,9 +31,9 @@ class LogTool:
 class InputTool:
     def get(self) -> str:
         """
-        Get input from the user.
+        ユーザーからの入力を取得する。
         Returns:
-            str: The input provided by the user.
+            str: ユーザーが提供した入力。
         """
         return "This is a placeholder input from the user."
 
@@ -46,13 +47,13 @@ class SingleAgentTools(BaseTools):
 
     def stop(self) -> None:
         """
-        Stop the agent's tools.
+        エージェントのツール群を停止する。
         """
         pass
 
     def save(self) -> None:
         """
-        Save the state of the agent's tools.
+        エージェントのツール群の状態を保存する。
         """
         pass
 
@@ -73,7 +74,7 @@ class SingleAgentMemory(BaseModel):
     content: str
 
 
-class SingleAgent(BaseAgent[SingleAgentTools]):
+class SingleAgent(JsonLinesStateMixin[SingleAgentMemory], BaseAgent[SingleAgentTools]):
     def __init__(
         self,
         config: SimpleAgentConfig,
@@ -120,18 +121,18 @@ class SingleAgent(BaseAgent[SingleAgentTools]):
     def stop(self) -> None:
         self.stop_event.set()
 
-    def save(self) -> None:
-        with self.memory_path.open("w") as f:
-            for memory in self.memories:
-                print(memory.model_dump_json(), file=f)
+    # JsonLinesStateMixin hooks -------------------------------------------------
+    def get_state_path(self) -> Path:
+        return self.memory_path
 
-    def load(self) -> None:
-        if not self.memory_path.exists():
-            self.memories = []
-            return
-        self.memories = [
-            SingleAgentMemory.model_validate_json(line) for line in self.memory_path.read_text().splitlines() if line
-        ]
+    def state_model_type(self) -> type[SingleAgentMemory]:
+        return SingleAgentMemory
+
+    def serialize_state(self) -> list[SingleAgentMemory]:
+        return list(self.memories)
+
+    def apply_loaded_state(self, items: list[SingleAgentMemory]) -> None:
+        self.memories = list(items)
 
 
 single_agent_model_agent_types = {

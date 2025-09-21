@@ -1,12 +1,12 @@
 class LLMCallTool:
     def call(self, prompt: str, model_name: str) -> str:
         """
-        Call the LLM with the given prompt and model name.
+        指定されたプロンプトとモデル名でLLMを呼び出す。
         Args:
-            prompt (str): The prompt to send to the LLM.
-            model_name (str): The name of the model to use.
+            prompt (str): LLMに送信するプロンプト。
+            model_name (str): 利用するモデル名。
         Returns:
-            str: The response from the LLM.
+            str: LLMからの応答。
         """
         # Placeholder implementation
         return "LLM response based on prompt."

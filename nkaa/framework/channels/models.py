@@ -1,4 +1,4 @@
-"""Data models shared across channel primitives."""
+"""チャネル関連の各種プリミティブで共有されるデータモデル。"""
 
 from __future__ import annotations
 
@@ -9,13 +9,13 @@ from pydantic import BaseModel, Field
 
 
 def _utcnow() -> datetime:
-    """Return a timezone-aware UTC timestamp."""
+    """タイムゾーン情報を含むUTCタイムスタンプを返す。"""
 
     return datetime.now(UTC)
 
 
 class ChannelMetadata(BaseModel):
-    """Lightweight description of a channel preserved in the repository."""
+    """リポジトリに保持されるチャネルの軽量なメタデータ。"""
 
     id: str
     name: str | None = None
@@ -25,7 +25,7 @@ class ChannelMetadata(BaseModel):
 
 
 class ChannelMessage(BaseModel):
-    """Structured message persisted for channel history."""
+    """チャネル履歴として保存される構造化メッセージ。"""
 
     channel_id: str
     sender_id: str
@@ -37,14 +37,14 @@ class ChannelMessage(BaseModel):
 
 
 class ChannelMembership(BaseModel):
-    """Agent participating in a specific channel."""
+    """特定のチャネルに参加するエージェントを表す。"""
 
     channel_id: str
     agent_id: str
 
 
 class UnreadRecord(BaseModel):
-    """Record describing an unread message entry for an agent."""
+    """エージェント向けの未読メッセージを表すレコード。"""
 
     agent_id: str
     channel_id: str

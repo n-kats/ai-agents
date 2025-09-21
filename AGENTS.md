@@ -3,6 +3,9 @@
 # Repository Guidelines
 
 ## ドキュメントと進捗管理の原則
+- 作業開始前に `docs/directory_structure.md` を確認し、該当機能の仕様書がどこにあるか把握してから実装に着手する。
+- 最新の進捗や未完了タスクは `docs/implementation_status.md` に集約されているため、着手時と完了時に必ず参照し更新する。
+- `docs/meta_plan/` 配下の資料は個別指示がある場合のみ参照し、通常の実装判断には使用しない。
 - 機能の仕様や未解決事項は `docs/` 配下の専用資料（例: `docs/channel_spec.md`）に集約し、関連文書も合わせて更新する。
 - 一時的な作業ディレクトリ（例: `_tmp/`）はドキュメントに掲載せず、正式な構成やサンプルは仕様書やテストへ反映する。
 - パッケージ再編や機能拡張を行う場合は `docs/concept.md`、`docs/directory_structure.md`、`docs/implementation_status.md` を同時に見直し、設計意図と進捗を同期させる。

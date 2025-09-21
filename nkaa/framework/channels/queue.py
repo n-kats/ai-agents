@@ -1,4 +1,4 @@
-"""Utilities for managing agent-specific message queues."""
+"""エージェント専用メッセージキューを管理するユーティリティ。"""
 
 from __future__ import annotations
 
@@ -9,14 +9,14 @@ from typing import Iterable, Sequence
 
 
 def _utcnow() -> datetime:
-    """Return a timezone-aware UTC timestamp."""
+    """タイムゾーン情報を含むUTCタイムスタンプを返す。"""
 
     return datetime.now(UTC)
 
 
 @dataclass(frozen=True)
 class AgentMessagePointer:
-    """Pointer to a message stored in the repository for a specific agent."""
+    """リポジトリに保存されたメッセージを特定のエージェント向けに指し示すポインタ。"""
 
     channel_id: str
     message_id: int
@@ -39,7 +39,7 @@ class _QueueEntry:
 
 
 class MessageQueue:
-    """Priority queue with deterministic ordering for message pointers."""
+    """メッセージポインタを決定的な順序で扱う優先度付きキュー。"""
 
     def __init__(self) -> None:
         self._queue: PriorityQueue[_QueueEntry] = PriorityQueue()

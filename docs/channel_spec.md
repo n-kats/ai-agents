@@ -9,17 +9,18 @@
 - チャネル ID の発番とチャネルインスタンスの登録を担当する。
 - エージェントの参加 (`join_agent`)・離脱 (`leave_agent`) を管理し、所属チャネルごとの未読キューを更新する。
 - メッセージ書き込み時に履歴を保存し、各エージェント専用キューへメッセージ ID と優先度を投入する。
-- `save()` 実行時に全チャネルをフラッシュし、未読キューのスナップショットを永続化する。
+- チャネル生成時に永続化用コールバック（`save_hook`）をチャネルへ渡し、チャネル単体での保存操作を可能にする。
 - リポジトリからチャネル・未読情報を復元して起動時状態を再構成する。
 
 ### ChannelTools (`nkaa/framework/tools.py`)
 - エージェントが利用するチャネル操作の窓口。
-- `join/leave/send/read` を提供し、内部的に `ChannelManager` の API を呼び出す。
+- `join/leave/send/read` や `snapshot_unread`・`save_channel` を提供し、内部的に `ChannelManager` の API を呼び出す。
+- `save()` で担当エージェントの未読キューをスナップショットとして永続化する。既存スナップショットから自身のレコードだけを差し替えるため、他エージェントの未読状態を維持できる。
 - エージェント ID ごとに初期化され、初期化時に未読キュー登録を確実に行う。
 
 ### ChannelRepository (`nkaa/framework/channels/repository.py`)
 - チャネルメタデータ、メッセージ履歴、未読レコード、所属情報を読み書きする抽象層。
-- 既定では `InMemoryChannelRepository` を使用し、PostgreSQL などの本番用実装は同インターフェース差し替えで導入する。
+- 既定では `InMemoryChannelRepository` を使用し、`SQLChannelRepository` を通じて PostgreSQL / SQLite などの永続化層へ差し替えられる。
 - `persist_message` は永続層で採番した `message_id` を返却し、`ChannelManager` 側での未読管理に利用する。
 
 ### MessageQueue (`nkaa/framework/channels/queue.py`)
@@ -30,15 +31,15 @@
 ## 決定済みの仕様
 - メッセージ履歴はデータベース（PostgreSQL を想定）に保存し、チャネル本体は `ChannelRepository` を通じて永続化操作を行う。
 - `ChannelMessage.payload` には JSON など構造化データを保持できる。永続層でのシリアライズ形式はリポジトリ実装が担う。
-- `ChannelManager.save()` は全チャネルの `save()` を呼び出したうえで、全エージェント未読キューをスナップショットとしてリポジトリに保存する。
+- `ChannelManager.snapshot_unread_records()` で未読キューのスナップショットを取得し、永続化はリポジトリやエージェント側の責務として扱う。
 - チャネル ID は `channel_{n}` 形式で発番し、外部指定は今後の拡張とする。
 - InMemory リポジトリを用いた動作確認では、後述のサンプルコードのように `ChannelManager` と `ChannelTools` を組み合わせて基本的な送受信と復元フローを確認できる。
 
 ## 未決事項・課題
-- **PostgreSQL 実装**: 履歴・未読テーブルのスキーマ、トランザクション制御、`save()` のフラッシュ戦略など具体的な実装が未完。
+- ~~**PostgreSQL 実装**~~: SQLAlchemy ベースの `SQLChannelRepository` としてチャネル履歴／未読スナップショットの永続化を実装済み（PostgreSQL, SQLite をサポート）。
 - **チャネル探索 API**: エージェントが自律的にチャネルを探索・購読するための API 設計とアクセス制御が未定。
 - **ペイロードスキーマ**: `ChannelMessage.payload` のバージョニングや検証ポリシーが未策定。後方互換性を含めた運用方針を定める必要がある。
-- **スナップショット運用**: `save()` の頻度・差分保存・クラッシュ復旧手順などを検討し、運用指針に落とし込む必要がある。
+- **スナップショット運用**: 未読スナップショットの取得・保存タイミングとクラッシュ復旧手順を整理する必要がある。
 - **停止時の扱い**: エージェント削除時の未読キュー・所属情報の処理方針が未決。
 - **テスト拡充**: PostgreSQL バックエンドや複数プロセスを想定した統合テスト戦略が今後の課題。
 
@@ -64,7 +65,9 @@ alice.send(channel.id, {"text": "こんにちは"})
 message = bob.read()
 print("Bob received:", message.payload if message else None)
 
-manager.save()
+# エージェントごとに未読スナップショットを永続化
+alice.save()
+bob.save()
 
 restored_manager = ChannelManager(repository)
 restored_message = restored_manager.read_for_agent("bob")

@@ -4,13 +4,13 @@
 - [x] Base abstractions (`BaseAgent`, `BaseTools`, `BaseManager`) are defined (`nkaa/framework/agent.py`).
 - [x] `AgentConfig.build` が抽象メソッド化され、サブクラス実装を強制するようになった (`nkaa/framework/agent.py:65`).
 - [x] `StandardManager._load_agent` が設定ファイルを正しく読み込み、対応する `AgentConfig` サブクラスからエージェントを構築するよう修正済み (`nkaa/framework/agent.py:147`).
-- [ ] エージェント状態の `load/save` のデフォルト実装は無く、サンプルも未提供。
+- [x] エージェント状態の `load/save` のデフォルト実装として `JsonLinesStateMixin` を追加し、プリセットで採用 (`nkaa/framework/persistence.py`, `nkaa/presets/managers/single_agent_model.py`).
 
 - [x] チャンネル周りを専用パッケージへ再編し、`ChannelManager`・`ChannelTools`・キュー・リポジトリの責務を整理 (`nkaa/framework/channels/`, `nkaa/framework/tools.py`).
-- [ ] PostgreSQL バックエンドの `ChannelRepository` 実装（履歴/未読テーブル定義、トランザクション制御、`save()` フラッシュ戦略）。
+- [x] PostgreSQL / SQLite 向け `SQLChannelRepository` を追加し、履歴・未読テーブルと `save()` スナップショットの永続化を実装。
 - [ ] エージェントが能動的にチャネル検索・購読できる API 設計（検索、招待、承認フローなど）。
 - [ ] メッセージペイロードのバージョニング/検証ルールと後方互換性戦略の策定。
-- [ ] `ChannelManager.save()` のスナップショット最適化およびクラッシュ復旧手順の整備。
+- [ ] `ChannelManager.snapshot_unread_records()` を活用した未読スナップショット運用ポリシーとクラッシュ復旧手順の整備（暫定的に `ChannelTools.save()` で担当エージェント分を永続化）。
 
 ## Tool Injection / Adapter
 - [x] アダプター経由でツールをエージェントへ渡す設計が成立 (`nkaa/framework/agent.py:120`).

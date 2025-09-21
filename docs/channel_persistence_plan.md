@@ -1,5 +1,7 @@
 # チャンネル永続化方針（PostgreSQL + Docker Compose）
 
+> **更新**: SQLAlchemy を利用した `SQLChannelRepository` を `nkaa/framework/channels/repository.py` に追加し、PostgreSQL / SQLite を含む RDBMS 上でチャネル履歴と未読情報を扱えるようになりました。本ドキュメントの設計方針は継続的な改善タスク（一括キュー処理や Docker Compose 化など）を整理する目的で維持しています。
+
 ## ゴール
 - チャンネルのプライマリキューを PostgreSQL で運用し、優先度とタイムスタンプを複合キーとして安定ソートする。
 - Python からは SQLAlchemy あるいは pgmq などのライブラリを用い、`ORDER BY priority, scheduled_at, id` と `FOR UPDATE SKIP LOCKED` を活用した並列デキューを実現する。

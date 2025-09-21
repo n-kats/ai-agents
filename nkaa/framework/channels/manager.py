@@ -1,4 +1,4 @@
-"""Channel manager coordinating channel lifecycle and agent delivery."""
+"""チャネルのライフサイクルとエージェントへの配送を調整するチャネルマネージャー。"""
 
 from __future__ import annotations
 
@@ -12,7 +12,7 @@ from .repository import ChannelRepository, ChannelRepositoryError
 
 
 class ChannelManager:
-    """Manage channels, memberships, and unread pointers for agents."""
+    """チャネル、メンバーシップ、未読ポインタを管理するクラス。"""
 
     def __init__(self, repository: ChannelRepository) -> None:
         self.repository = repository
@@ -40,9 +40,22 @@ class ChannelManager:
 
     def create(self, config: ChannelConfig, *, channel_cls: type[BaseChannel] | None = None) -> BaseChannel:
         channel_id = self.new_id()
-        channel = config.build(channel_id, repository=self.repository)
+
+        def save_hook(channel_id: str = channel_id) -> None:
+            self.repository.flush_channel(channel_id)
+
+        channel = config.build(
+            channel_id,
+            repository=self.repository,
+            save_hook=save_hook,
+        )
         if channel_cls is not None and not isinstance(channel, channel_cls):
-            channel = channel_cls(channel_id, repository=self.repository, metadata=channel.metadata)
+            channel = channel_cls(
+                channel_id,
+                repository=self.repository,
+                metadata=channel.metadata,
+                save_hook=save_hook,
+            )
         return self.register(channel)
 
     def find(self, id_: str) -> BaseChannel:
@@ -54,24 +67,25 @@ class ChannelManager:
     def list_channels(self) -> Mapping[str, BaseChannel]:
         return dict(self.channels)
 
-    def save(self) -> None:
-        for channel in self.channels.values():
-            channel.save()
+    def snapshot_unread_records(self, agent_id: str | None = None) -> list[UnreadRecord]:
+        """未読キューのスナップショットを取得する（エージェントを限定することも可能）。"""
 
-        unread_records: list[UnreadRecord] = []
-        for agent_id, queue in self._agent_queues.items():
+        records: list[UnreadRecord] = []
+        targets = {agent_id} if agent_id is not None else None
+        for current_agent, queue in self._agent_queues.items():
+            if targets is not None and current_agent not in targets:
+                continue
             for pointer in queue.snapshot():
-                unread_records.append(
+                records.append(
                     UnreadRecord(
-                        agent_id=agent_id,
+                        agent_id=current_agent,
                         channel_id=pointer.channel_id,
                         message_id=pointer.message_id,
                         priority=pointer.priority,
                         enqueued_at=pointer.enqueued_at,
                     )
                 )
-
-        self.repository.replace_unread_records(unread_records)
+        return records
 
     # ------------------------------------------------------------------
     # Membership management
@@ -138,7 +152,16 @@ class ChannelManager:
     # ------------------------------------------------------------------
     def _restore_channels(self) -> None:
         for metadata in self.repository.list_channels():
-            channel = DatabaseChannel.from_metadata(metadata, repository=self.repository)
+            channel_id = metadata.id
+
+            def save_hook(channel_id: str = channel_id) -> None:
+                self.repository.flush_channel(channel_id)
+
+            channel = DatabaseChannel.from_metadata(
+                metadata,
+                repository=self.repository,
+                save_hook=save_hook,
+            )
             self.register(channel)
 
     def _restore_memberships(self) -> None:
