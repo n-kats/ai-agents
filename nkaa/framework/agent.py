@@ -2,7 +2,7 @@ import json
 from abc import ABC, abstractmethod
 from multiprocessing import Event, Process
 from pathlib import Path
-from typing import Callable, Generic, Type, TypeVar
+from typing import Callable, Generic, Type, TypeVar, cast
 
 from pydantic import BaseModel
 
@@ -28,11 +28,12 @@ TTools = TypeVar("TTools", bound=BaseTools)
 
 class BaseAgent(ABC, Generic[TTools]):
     @abstractmethod
-    def run(self, tools: BaseTools) -> None:
+    def run(self, tools: TTools) -> None:
         """
         エージェントのメインロジックを実行するメソッド。
         Args:
-            tools (BaseTools): エージェントが使用するツールのインスタンス。ツールを介してLLMの実行、他エージェントとの通信、ログの記録などを行う。
+            tools (TTools): エージェントが使用するツールのインスタンス。
+                ツールを介してLLMの実行、他エージェントとの通信、ログの記録などを行う。
         """
         pass
 
@@ -73,7 +74,8 @@ class BaseManager(ABC):
         """
         マネージャーのメインロジックを実行するメソッド。
         Args:
-            tools (TManagerTools): マネージャーが使用するツールのインスタンス。ツールを介してLLMの実行、他エージェントとの通信、ログの記録などを行う。
+            tools (TManagerTools): マネージャーが使用するツールのインスタンス。
+                ツールを介してLLMの実行、他エージェントとの通信、ログの記録などを行う。
         """
         pass
 
@@ -121,15 +123,20 @@ TManagerConfig = TypeVar("TManagerConfig", bound=StandardManagerConfig)
 TManagerTools = TypeVar("TManagerTools", bound=BaseTools)
 
 
-class StandardManager(BaseManager, Generic[TManagerConfig, TManagerTools]):
-    def __init__(self, config: TManagerConfig, adapter: Callable[[BaseAgent, TManagerTools], BaseTools]) -> None:
+class StandardManager(BaseManager, Generic[TManagerConfig, TManagerTools, TTools]):
+    def __init__(
+        self,
+        config: TManagerConfig,
+        adapter: Callable[[BaseAgent[TTools], TManagerTools], TTools],
+    ) -> None:
         """
         Args:
             config (TManagerConfig): マネージャーの設定。
-            adapter (Callable[[BaseAgent, TManagerTools], BaseTools]): エージェントにツールを適用するためのアダプター関数。
+            adapter (Callable[[BaseAgent[TTools], TManagerTools], TTools]):
+                エージェントにツールを適用するためのアダプター関数。
         """
         self.config = config
-        self.agents: list[BaseAgent] = [
+        self.agents: list[BaseAgent[TTools]] = [
             self._load_agent(config_path) for config_path in config.get_agent_config_paths()
         ]
         self.adapter = adapter
@@ -138,19 +145,19 @@ class StandardManager(BaseManager, Generic[TManagerConfig, TManagerTools]):
         self.agent_processes: list[Process] = []
         self.stop_event = Event()
 
-    def _load_agent(self, config_path: Path) -> BaseAgent:
+    def _load_agent(self, config_path: Path) -> BaseAgent[TTools]:
         """
         指定された設定ファイルからエージェントをロードするメソッド。
         Args:
             config_path (Path): エージェントの設定ファイルのパス。
         Returns:
-            BaseAgent: ロードされたエージェントのインスタンス。
+            BaseAgent[TTools]: ロードされたエージェントのインスタンス。
         """
         raw_text = config_path.read_text()
         data = json.loads(raw_text)
         agent_config_type = self.config.get_agent_config_type(data["type"])
         agent_config = agent_config_type.model_validate_json(raw_text)
-        agent = agent_config.build()
+        agent = cast(BaseAgent[TTools], agent_config.build())
         agent.load()
         return agent
 
@@ -194,10 +201,10 @@ class StandardManager(BaseManager, Generic[TManagerConfig, TManagerTools]):
         """
         pass
 
-    def create_stop_event_tool(self):
+    def create_stop_event_tool(self) -> Callable[[], None]:
         """
         エージェントの実行を停止するためのイベントツールを作成するメソッド。
         Returns:
             Event: エージェントの実行を停止するためのイベント。
         """
-        return lambda: self.stop_event.set()
+        return self.stop_event.set

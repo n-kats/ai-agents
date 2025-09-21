@@ -6,10 +6,11 @@
 - [x] `StandardManager._load_agent` が設定ファイルを正しく読み込み、対応する `AgentConfig` サブクラスからエージェントを構築するよう修正済み (`nkaa/framework/agent.py:147`).
 - [ ] エージェント状態の `load/save` のデフォルト実装は無く、サンプルも未提供。
 
-## Channel / Messaging
-- [x] メッセージ型と優先度付きキューのスケルトンは用意済み (`nkaa/framework/messages.py`, `nkaa/framework/channel.py`).
-- [x] `ChannelManager` がインメモリチャネル登録・生成・保存フックを持つように整理され、基本的な操作が利用可能 (`nkaa/framework/channel.py:55`).
-- [x] `MessageQueue.put/get` の不整合修正と `Empty` ハンドリング追加により、未定義引数や空キュー時の例外を回避 (`nkaa/framework/channel.py:126`).
+- [x] チャンネル周りを専用パッケージへ再編し、`ChannelManager`・`ChannelTools`・キュー・リポジトリの責務を整理 (`nkaa/framework/channels/`, `nkaa/framework/tools.py`).
+- [ ] PostgreSQL バックエンドの `ChannelRepository` 実装（履歴/未読テーブル定義、トランザクション制御、`save()` フラッシュ戦略）。
+- [ ] エージェントが能動的にチャネル検索・購読できる API 設計（検索、招待、承認フローなど）。
+- [ ] メッセージペイロードのバージョニング/検証ルールと後方互換性戦略の策定。
+- [ ] `ChannelManager.save()` のスナップショット最適化およびクラッシュ復旧手順の整備。
 
 ## Tool Injection / Adapter
 - [x] アダプター経由でツールをエージェントへ渡す設計が成立 (`nkaa/framework/agent.py:120`).
@@ -27,5 +28,5 @@
 - [ ] 実行可能なエンドツーエンド例はまだ整っていない。
 
 ## Legacy Artifacts
-- [ ] `research_agent_v1/v2` は旧試作で設計方針と乖離。整理 (削除/アーカイブ) 方針が未決定。
+- [x] `legacy/research_agent_v1/` と `legacy/research_agent_v2/` に旧試作を集約し、参照専用としてアーカイブした。
 - [ ] 旧設計のドキュメントは `docs/legacy/` に移動済み。必要に応じて要点を現行ドキュメントへ移譲する。

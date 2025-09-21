@@ -11,18 +11,21 @@
 - `docker/` : Docker Compose など環境構築用ファイル（PostgreSQL チャンネル基盤を追加予定）。
 - `Makefile`, `pyproject.toml`, `uv.lock` : ビルドと依存管理設定。
 - `_cache/`, `_output/`, `_data/` : 実行時生成物やキャッシュ（必要に応じて作成）。
+- `_tmp/` : 一時ファイル群。Codex 用の仮想環境 `_tmp/codex_venv` もここに配置する。
 
 ## `nkaa/` 配下
 - `framework/` : `BaseAgent`, `StandardManager`, チャンネル抽象など基盤クラス。
+  - `channels/` : チャンネル本体、マネージャ、優先度キュー、永続化リポジトリの実装。
 - `presets/`
   - `managers/` : プリセットマネージャ（例: `single_agent_model.py`）。
   - `tools/` : プリセットで利用するツールのダミー実装。
-- `research_agent_v1/`, `research_agent_v2/` : 旧研究用実装。設計メモは `docs/legacy/` を参照。
+- `legacy/` : 旧研究用実装 (`legacy/research_agent_v1/`, `legacy/research_agent_v2/`) を格納。設計メモは `docs/legacy/` を参照。
 
 ## `docs/` 配下
 - `concept.md` : 現行コンセプトと設計概要。
 - `implementation_status.md` : 実装進捗チェックリスト。
 - `channel_persistence_plan.md` : PostgreSQL を用いたチャンネル永続化案。
+- `channel_spec.md` : チャンネル仕様の決定事項および未解決課題のまとめ。
 - `directory_structure.md` : 本ファイル。
 - `meta_plan/` : 共通ガイドライン。
 - `legacy/` : 旧資料。

@@ -1,38 +1,46 @@
+最優先条件: 本リポジトリに関する回答は必ず日本語で行うこと。
+
 # Repository Guidelines
 
-## プロジェクト構造 と モジュール
-- コア フレームワーク は `nkaa/framework/` に 集約 され、エージェント・チャネル 抽象 を 提供 します。
-- プリセット と アダプター は `nkaa/presets/` に 置き、新規 エージェント や ツール を 統合 します。
-- レガシー 試作 は `nkaa/research_agent_v1/` と `nkaa/research_agent_v2/`、参照 のみ で 改変 禁止 です。
-- 設計 メモ と チェックリスト は `docs/concept.md` と `docs/implementation_status.md` を 確認 します。
-- ルート 直下 の `pyproject.toml`、`Makefile`、`config.yaml` が 開発 設定 を 管理 します。
+## ドキュメントと進捗管理の原則
+- 機能の仕様や未解決事項は `docs/` 配下の専用資料（例: `docs/channel_spec.md`）に集約し、関連文書も合わせて更新する。
+- 一時的な作業ディレクトリ（例: `_tmp/`）はドキュメントに掲載せず、正式な構成やサンプルは仕様書やテストへ反映する。
+- パッケージ再編や機能拡張を行う場合は `docs/concept.md`、`docs/directory_structure.md`、`docs/implementation_status.md` を同時に見直し、設計意図と進捗を同期させる。
 
-## ビルド・テスト・開発 コマンド
-- `uv sync --group dev` で ランタイム と 開発 依存 を まとめて 導入 します。`uv` 無し なら `pip install -e .` 後 に `ruff`、`mypy`、`pytest` を 入れます。
-- `make lint` は Ruff と mypy を 通し、`nkaa/` を 静的 チェック します。
-- `make format` は Ruff フォーマッタ と 自動 修正 を 実行 し コード を 整えます。
-- `make test` や `pytest` で テスト を 実行。個別 対象 は `pytest path/to/module` を 使用 します。
+## プロジェクト構造とモジュール
+- コアフレームワークは `nkaa/framework/` に集約され、エージェントおよびチャネル抽象を提供する。
+- プリセットとアダプターは `nkaa/presets/` に配置し、新規エージェントやツールの統合を容易にする。
+- レガシー試作は `nkaa/legacy/research_agent_v1/` と `nkaa/legacy/research_agent_v2/` に保管し、参照のみで改変しない。
+- 設計メモやチェックリストは `docs/concept.md` と `docs/implementation_status.md` を確認する。
+- ルート直下の `pyproject.toml`、`Makefile`、`config.yaml` が開発設定を管理する。
 
-## コーディング 規約 と 命名
-- インデント は 4 スペース、行長 は 120 文字 以下、`ruff format` が ダブル クオート と import 順 を 強制 します。
-- モジュール・関数 は snake_case、クラス は CapWords、設定 クラス は `<Role>Config` を 採用 します。
-- 公開 API に 型 注釈 を 付け、`pyproject.toml` の mypy 設定 に 従って 明示 戻り値 を 書きます。
-- 副作用 は マネージャー 層 または ツール 層 に 集約 し、フレームワーク 層 は 宣言 的 に 保ちます。
+## ビルド・テスト・開発コマンド
+- Codex 実行環境では `_tmp/codex_venv` を専用の仮想環境として利用する。`UV_PROJECT_ENVIRONMENT=_tmp/codex_venv uv sync --group dev` を実行し、ホスト/コンテナ間で共通のパスを使う。
+- `uv` が利用できない場合は `python -m venv _tmp/codex_venv` で仮想環境を作成し、`source _tmp/codex_venv/bin/activate && pip install -e . && pip install ruff mypy pytest` を実行する。
+- `make lint` は Ruff と mypy を実行し、`nkaa/` 以下を静的チェックする。
+- `make format` は Ruff フォーマッタと自動修正を適用し、コードスタイルを揃える。
+- `make test` または `pytest` でテストを実行する。個別モジュールを対象にする場合は `pytest path/to/module` を利用する。
 
-## テスト 方針
-- pytest を 基本 と し、対象 モジュール 名 と 対応 テスト 名 (`agent.py` ↔ `test_agent.py`) を 揃えます。
-- チャネル キュー、マネージャー ライフサイクル、アダプター 経路 の 正常 系 と 例外 系 を カバー します。
-- LLM や I/O 依存 は プリセット 内 フェイク ツール で 代替 し テスト を 決定的 に します。
-- バグ 修正 では 回帰 テスト を 追加 し、`make test` 成果 を PR 説明 に 記載 します。
+## コーディング規約と命名
+- インデントは4スペース、行長は120文字以下とし、`ruff format` によるダブルクオート化と import 順序に従う。
+- モジュール・関数は snake_case、クラスは CapWords、設定クラスは `<Role>Config` の命名規則を用いる。
+- 公開 API には型注釈を付け、`pyproject.toml` の mypy 設定に従って戻り値を明示する。
+- 副作用はマネージャ層またはツール層に集約し、フレームワーク層は宣言的に保つ。
 
-## コミット と Pull Request
-- コミット メッセージ は 命令形 と スコープ 接頭辞 (`framework: add channel persistence`) を 使い、`wip` を 避けます。
-- PR 前 に rebase か squash で 履歴 を 整理 し 差分 を 明瞭 に します。
-- PR 説明 には 目的、変更 点、検証 (`make lint && make test`) を 記し、関連 Issue や ドキュメント を 紐付けます。
-- ユーザー 影響 が 見える 変更 では ログ や スクリーンショット を 添付 します。
-- ファイル 編集 は `cat <<EOF > file` ではなく `apply_patch` 等 の 差分 適用 で 行い、既存 内容 の 破壊 を 避けます。
+## テスト方針
+- pytest を基盤とし、対象モジュールと対応するテスト（例: `agent.py` ↔ `test_agent.py`）を揃える。
+- チャネルキュー、マネージャライフサイクル、アダプター経路の正常系と例外系を網羅する。
+- LLM や I/O 依存はプリセット内のフェイクツールで代替し、テストを決定的にする。
+- バグ修正では回帰テストを追加し、`make test` の実行結果を PR 説明に記載する。
 
-## エージェント と チャネル の 実装 ヒント
-- 実装 前 に `docs/concept.md` と `docs/implementation_status.md` の 未完 事項 を 確認 し 方針 を 整えます。
-- 新規 エージェント は `StandardManager` と `nkaa/presets/managers/single_agent_model.py` の アダプター パターン を 再利用 します。
-- 実運用 ツール は `nkaa/presets/tools/` を 拡張 し、設定 オプション と 依存 を ドキュメント に 反映 します。
+## コミットと Pull Request
+- コミットメッセージは命令形とスコープ接頭辞（例: `framework: add channel persistence`）を用い、`wip` を避ける。
+- PR 前に rebase または squash で履歴を整理し、差分を明瞭にする。
+- PR 説明では目的・変更点・検証内容（例: `make lint && make test`）を記し、関連 Issue やドキュメントを紐付ける。
+- ユーザー影響がある変更ではログやスクリーンショットを添付する。
+- ファイル編集は `cat <<EOF > file` ではなく `apply_patch` などの差分適用を使用し、既存内容を安全に保つ。
+
+## エージェントとチャネルの実装ヒント
+- 実装前に `docs/concept.md` および `docs/implementation_status.md` の未完事項を確認し、方針を固める。
+- 新規エージェントは `StandardManager` と `nkaa/presets/managers/single_agent_model.py` のアダプターパターンを再利用する。
+- 実運用ツールは `nkaa/presets/tools/` を拡張し、設定オプションや依存関係をドキュメントへ反映する。

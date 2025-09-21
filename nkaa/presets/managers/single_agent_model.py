@@ -73,19 +73,16 @@ class SingleAgentMemory(BaseModel):
     content: str
 
 
-class SingleAgent(BaseAgent):
+class SingleAgent(BaseAgent[SingleAgentTools]):
     def __init__(
         self,
         config: SimpleAgentConfig,
     ):
         self.config = config
         self.memory_path = self.config.data_root_dir / "memory.jsonl"
-        self.memories = (
-            []
-            if not self.memory_path.exists()
-            else [SingleAgentMemory.model_validate_json(line) for line in self.memory_path.read_text().splitlines()]
-        )
+        self.memories: list[SingleAgentMemory] = []
         self.stop_event = Event()
+        self.load()
 
     def run(self, tools: SingleAgentTools) -> None:
         while not self.stop_event.is_set():
@@ -128,6 +125,14 @@ class SingleAgent(BaseAgent):
             for memory in self.memories:
                 print(memory.model_dump_json(), file=f)
 
+    def load(self) -> None:
+        if not self.memory_path.exists():
+            self.memories = []
+            return
+        self.memories = [
+            SingleAgentMemory.model_validate_json(line) for line in self.memory_path.read_text().splitlines() if line
+        ]
+
 
 single_agent_model_agent_types = {
     "SingleAgent": SimpleAgentConfig,
@@ -143,12 +148,12 @@ class SingleAgentModelConfig(StandardManagerConfig):
 
     def get_agent_config_type(self, type_name: str) -> Type[AgentConfig]:
         type_ = single_agent_model_agent_types.get(type_name)
-        if type is None:
+        if type_ is None:
             raise ValueError(f"Unknown agent type: {type_name}")
         return type_
 
 
-class SingleAgentModel(StandardManager):
+class SingleAgentModel(StandardManager[SingleAgentModelConfig, SingleAgentTools, SingleAgentTools]):
     def _load_tools(self) -> SingleAgentTools:
         return SingleAgentTools(
             llm_call_tool=LLMCallTool(),
@@ -163,5 +168,5 @@ class SingleAgentModel(StandardManager):
         return cls(config, single_agent_model_adapter)
 
 
-def single_agent_model_adapter(agent: BaseAgent, tools: SingleAgentTools) -> SingleAgentTools:
+def single_agent_model_adapter(agent: BaseAgent[SingleAgentTools], tools: SingleAgentTools) -> SingleAgentTools:
     return tools

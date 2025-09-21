@@ -1,0 +1,77 @@
+# チャンネル仕様ドキュメント
+
+## 概要
+チャネル機能はエージェント間のメッセージ交換を共通の抽象で扱うための仕組みです。本ドキュメントではチャネルに関連するコンポーネント、合意済みの仕様、今後残っている課題を整理します。
+
+## コンポーネント構成
+
+### ChannelManager (`nkaa/framework/channels/manager.py`)
+- チャネル ID の発番とチャネルインスタンスの登録を担当する。
+- エージェントの参加 (`join_agent`)・離脱 (`leave_agent`) を管理し、所属チャネルごとの未読キューを更新する。
+- メッセージ書き込み時に履歴を保存し、各エージェント専用キューへメッセージ ID と優先度を投入する。
+- `save()` 実行時に全チャネルをフラッシュし、未読キューのスナップショットを永続化する。
+- リポジトリからチャネル・未読情報を復元して起動時状態を再構成する。
+
+### ChannelTools (`nkaa/framework/tools.py`)
+- エージェントが利用するチャネル操作の窓口。
+- `join/leave/send/read` を提供し、内部的に `ChannelManager` の API を呼び出す。
+- エージェント ID ごとに初期化され、初期化時に未読キュー登録を確実に行う。
+
+### ChannelRepository (`nkaa/framework/channels/repository.py`)
+- チャネルメタデータ、メッセージ履歴、未読レコード、所属情報を読み書きする抽象層。
+- 既定では `InMemoryChannelRepository` を使用し、PostgreSQL などの本番用実装は同インターフェース差し替えで導入する。
+- `persist_message` は永続層で採番した `message_id` を返却し、`ChannelManager` 側での未読管理に利用する。
+
+### MessageQueue (`nkaa/framework/channels/queue.py`)
+- 各エージェント専用の優先度付きキュー実装。
+- キュー要素はメッセージ本体ではなく `AgentMessagePointer`（チャネル ID、メッセージ ID、優先度、投入時刻）であり、履歴取得はリポジトリ経由で行う。
+- チャネルフィルタリング、未読スナップショット取得、チャネル離脱時の破棄操作をサポートする。
+
+## 決定済みの仕様
+- メッセージ履歴はデータベース（PostgreSQL を想定）に保存し、チャネル本体は `ChannelRepository` を通じて永続化操作を行う。
+- `ChannelMessage.payload` には JSON など構造化データを保持できる。永続層でのシリアライズ形式はリポジトリ実装が担う。
+- `ChannelManager.save()` は全チャネルの `save()` を呼び出したうえで、全エージェント未読キューをスナップショットとしてリポジトリに保存する。
+- チャネル ID は `channel_{n}` 形式で発番し、外部指定は今後の拡張とする。
+- InMemory リポジトリを用いた動作確認では、後述のサンプルコードのように `ChannelManager` と `ChannelTools` を組み合わせて基本的な送受信と復元フローを確認できる。
+
+## 未決事項・課題
+- **PostgreSQL 実装**: 履歴・未読テーブルのスキーマ、トランザクション制御、`save()` のフラッシュ戦略など具体的な実装が未完。
+- **チャネル探索 API**: エージェントが自律的にチャネルを探索・購読するための API 設計とアクセス制御が未定。
+- **ペイロードスキーマ**: `ChannelMessage.payload` のバージョニングや検証ポリシーが未策定。後方互換性を含めた運用方針を定める必要がある。
+- **スナップショット運用**: `save()` の頻度・差分保存・クラッシュ復旧手順などを検討し、運用指針に落とし込む必要がある。
+- **停止時の扱い**: エージェント削除時の未読キュー・所属情報の処理方針が未決。
+- **テスト拡充**: PostgreSQL バックエンドや複数プロセスを想定した統合テスト戦略が今後の課題。
+
+## InMemory を利用した動作例
+
+以下は InMemory リポジトリを使ってチャネルを体験的に確認する最小コード例です。
+
+```python
+from nkaa.framework.channels import ChannelManager, DatabaseChannelConfig, InMemoryChannelRepository
+from nkaa.framework.tools import ChannelTools
+
+repository = InMemoryChannelRepository()
+manager = ChannelManager(repository)
+channel = manager.create(DatabaseChannelConfig(name="demo"))
+
+alice = ChannelTools(agent_id="alice", manager=manager)
+bob = ChannelTools(agent_id="bob", manager=manager)
+
+alice.join(channel.id)
+bob.join(channel.id)
+
+alice.send(channel.id, {"text": "こんにちは"})
+message = bob.read()
+print("Bob received:", message.payload if message else None)
+
+manager.save()
+
+restored_manager = ChannelManager(repository)
+restored_message = restored_manager.read_for_agent("bob")
+print("Restored unread:", restored_message.payload if restored_message else None)
+```
+
+## 関連資料
+- `docs/channel_persistence_plan.md` : PostgreSQL を用いた永続化設計案。
+- `docs/implementation_status.md` : チャネル実装に関する進捗と残タスク。
+- `tests/framework/test_channels.py` : InMemory 実装でチャネルの送受信や復元を確認するテスト。
