@@ -6,7 +6,7 @@ from collections import defaultdict
 from typing import Iterable, Mapping
 
 from .channel import BaseChannel, ChannelConfig, DatabaseChannel
-from .models import ChannelMembership, ChannelMessage, UnreadRecord
+from .models import ChannelMembership, ChannelMessage, ChannelMetadata, ChannelSearchQuery, UnreadRecord
 from .queue import AgentMessagePointer, MessageQueue
 from .repository import ChannelRepository, ChannelRepositoryError
 
@@ -66,6 +66,21 @@ class ChannelManager:
 
     def list_channels(self) -> Mapping[str, BaseChannel]:
         return dict(self.channels)
+
+    def search_channels(self, query: ChannelSearchQuery | None = None) -> list[ChannelMetadata]:
+        """チャネルメタデータを検索条件と照合して返す。"""
+
+        if query is None:
+            return [self.channels[channel_id].metadata for channel_id in sorted(self.channels)]
+
+        results: list[ChannelMetadata] = []
+        for channel_id in sorted(self.channels):
+            metadata = self.channels[channel_id].metadata
+            if query.matches(metadata):
+                results.append(metadata)
+                if query.limit is not None and len(results) >= query.limit:
+                    break
+        return results
 
     def snapshot_unread_records(self, agent_id: str | None = None) -> list[UnreadRecord]:
         """未読キューのスナップショットを取得する（エージェントを限定することも可能）。"""

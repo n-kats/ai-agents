@@ -6,7 +6,13 @@ import pytest
 from sqlalchemy import create_engine
 from sqlalchemy.pool import StaticPool
 
-from nkaa.framework.channels import ChannelManager, DatabaseChannelConfig, InMemoryChannelRepository, SQLChannelRepository
+from nkaa.framework.channels import (
+    ChannelManager,
+    ChannelSearchQuery,
+    DatabaseChannelConfig,
+    InMemoryChannelRepository,
+    SQLChannelRepository,
+)
 from nkaa.framework.channels.repository import ChannelRepository
 from nkaa.framework.tools import ChannelTools
 
@@ -108,3 +114,31 @@ def test_save_persists_agent_unread_queue(repository_factory: RepositoryFactory)
     assert alice_unread.message_id == stored.message_id
     assert bob_unread is not None
     assert bob_unread.message_id == stored.message_id
+
+
+def test_channel_search_and_auto_join(repository_factory: RepositoryFactory) -> None:
+    repository = repository_factory()
+    manager = ChannelManager(repository)
+    general = manager.create(DatabaseChannelConfig(name="general", attributes={"topic": "general"}))
+    alerts = manager.create(
+        DatabaseChannelConfig(name="alerts", description="operations", attributes={"topic": "ops", "level": "high"})
+    )
+    random = manager.create(DatabaseChannelConfig(name="random", description="Chit chat"))
+
+    tools = ChannelTools(agent_id="agent-2", manager=manager)
+
+    all_channels = tools.search()
+    assert {metadata.id for metadata in all_channels} == {general.id, alerts.id, random.id}
+
+    name_query = ChannelSearchQuery(name_contains="alert")
+    matched = tools.search(name_query)
+    assert [metadata.id for metadata in matched] == [alerts.id]
+
+    attribute_query = ChannelSearchQuery(attributes={"topic": "ops"})
+    joined = tools.join_matching(attribute_query)
+    assert joined == (alerts.id,)
+    assert alerts.id in tools.joined_channels()
+
+    # 再度 join_matching を呼んでも既存参加チャネルは重複しない
+    again = tools.join_matching(attribute_query)
+    assert again == ()

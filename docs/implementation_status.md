@@ -9,6 +9,8 @@
 - [x] チャンネル周りを専用パッケージへ再編し、`ChannelManager`・`ChannelTools`・キュー・リポジトリの責務を整理 (`nkaa/framework/channels/`, `nkaa/framework/tools.py`).
 - [x] PostgreSQL / SQLite 向け `SQLChannelRepository` を追加し、履歴・未読テーブルと `save()` スナップショットの永続化を実装。
 - [ ] エージェントが能動的にチャネル検索・購読できる API 設計（検索、招待、承認フローなど）。
+  - [x] `ChannelSearchQuery`・`ChannelManager.search_channels`・`ChannelTools.search`/`join_matching` を追加し、メタデータ条件での検索と自動参加をサポート。
+  - [ ] 招待・承認フローのモデリングと永続化方法の設計。
 - [ ] メッセージペイロードのバージョニング/検証ルールと後方互換性戦略の策定。
 - [ ] `ChannelManager.snapshot_unread_records()` を活用した未読スナップショット運用ポリシーとクラッシュ復旧手順の整備（暫定的に `ChannelTools.save()` で担当エージェント分を永続化）。
 

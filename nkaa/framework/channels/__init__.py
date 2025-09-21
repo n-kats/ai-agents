@@ -2,7 +2,7 @@
 
 from .channel import BaseChannel, ChannelConfig, ChannelMetadata, DatabaseChannel, DatabaseChannelConfig
 from .manager import ChannelManager
-from .models import ChannelMessage, UnreadRecord
+from .models import ChannelMessage, ChannelSearchQuery, UnreadRecord
 from .queue import AgentMessagePointer, MessageQueue
 from .repository import ChannelRepository, InMemoryChannelRepository, SQLChannelRepository
 
@@ -12,6 +12,7 @@ __all__ = [
     "ChannelConfig",
     "ChannelManager",
     "ChannelMessage",
+    "ChannelSearchQuery",
     "ChannelMetadata",
     "ChannelRepository",
     "DatabaseChannel",

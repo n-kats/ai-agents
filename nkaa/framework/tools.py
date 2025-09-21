@@ -5,7 +5,7 @@ from typing import Any, Iterable, Sequence
 
 from nkaa.framework.agent import BaseTools
 from nkaa.framework.channels.manager import ChannelManager
-from nkaa.framework.channels.models import ChannelMessage, ChannelMetadata, UnreadRecord
+from nkaa.framework.channels.models import ChannelMessage, ChannelMetadata, ChannelSearchQuery, UnreadRecord
 
 
 @dataclass
@@ -50,6 +50,22 @@ class ChannelTools(BaseTools):
     def leave(self, channel_id: str) -> None:
         self.manager.leave_agent(channel_id, self.agent_id)
 
+    def join_matching(self, query: ChannelSearchQuery, *, limit: int | None = None) -> Sequence[str]:
+        """検索条件に合致するチャネルへ自動参加するユーティリティ。"""
+
+        joined = set(self.joined_channels())
+        newly_joined: list[str] = []
+        for metadata in self.manager.search_channels(query):
+            channel_id = metadata.id
+            if channel_id in joined:
+                continue
+            self.join(channel_id)
+            joined.add(channel_id)
+            newly_joined.append(channel_id)
+            if limit is not None and len(newly_joined) >= limit:
+                break
+        return tuple(newly_joined)
+
     def joined_channels(self) -> Sequence[str]:
         return tuple(sorted(self.manager.channels_for_agent(self.agent_id)))
 
@@ -92,6 +108,11 @@ class ChannelTools(BaseTools):
     # ------------------------------------------------------------------
     def list_channels(self) -> Sequence[tuple[str, ChannelMetadata]]:
         return tuple((channel_id, channel.metadata) for channel_id, channel in self.manager.list_channels().items())
+
+    def search(self, query: ChannelSearchQuery | None = None) -> Sequence[ChannelMetadata]:
+        """チャネルメタデータを条件指定で取得する。"""
+
+        return tuple(self.manager.search_channels(query))
 
     def snapshot_unread(self) -> list[UnreadRecord]:
         """エージェント自身の未読情報スナップショットを取得する。"""

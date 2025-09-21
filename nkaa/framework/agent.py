@@ -188,6 +188,7 @@ class StandardManager(BaseManager, Generic[TManagerConfig, TManagerTools, TTools
         """
         標準マネージャーとその管理下にあるすべてのものを保存するメソッド。
         """
+        self.tools.save()
         for agent in self.agents:
             agent.save()
 
