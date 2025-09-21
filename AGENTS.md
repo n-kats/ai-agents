@@ -6,6 +6,7 @@
 ## コア構造
 - エージェント／ツール／マネージャの抽象は `nkaa/framework/agent.py:11` 以降で定義されており、`StandardManager` が複数プロセス実行と停止ハンドリングを担当します。
 - チャンネルとメッセージの骨組みは `nkaa/framework/channel.py:18` と `nkaa/framework/messages.py:2` にあります。複数チャンネルを束ねる想定と read/write API の雛形があるものの、実装は未完成です。
+- チャンネル集合をエージェントに注入する `ChannelTools` の雛形は `nkaa/framework/tools.py` にあります。
 - プリセット例は `nkaa/presets/managers/single_agent_model.py:55` にあり、`BaseTools` による依存注入やアダプター利用 (`nkaa/presets/managers/single_agent_model.py:155`) の最小パターンが確認できます。
 
 ## アダプター利用の意図

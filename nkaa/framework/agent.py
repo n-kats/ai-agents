@@ -1,163 +1,202 @@
 from pathlib import Path
-from typing import Type
+import json
+from multiprocessing import Process, Event
+from typing import Type, Callable, TypeVar, Generic
 from abc import abstractmethod, ABC
 from datetime import datetime
 from queue import PriorityQueue
-from typing import Generator
+from typing import Generator, Generic, TypeVar
 from pydantic import BaseModel, Field
 
-
-class BaseMessage(BaseModel):
-    messenger_id: str
-    created_at: datetime = Field(default_factory=datetime.now, description="The time when the message was created.")
-
-
-class OrderedMessage:
-    def __init__(self, message: BaseMessage, priority: int):
-        self.__message = message
-        self.__priority = priority
-
-    def __lt__(self, other: 'OrderedMessage') -> bool:
-        if self.__priority != other.__priority:
-            return self.__priority < other.__priority
-        return self.message.created_at < other.message.created_at
-
-    @property
-    def message(self) -> BaseMessage:
-        return self.__message
-
-
-class MessageQueue:
-    def __init__(self, priorities: dict[Type[BaseMessage], int] = None):
-        self.__queue = PriorityQueue()
-        self.__priorities = priorities.copy() if priorities is not None else {}
-        self.__last_priority = max(self.__priorities.values(), default=0) + 1
-
-    def put(self, message: BaseMessage):
-        self.__queue.put(OrderedMessage(
-            message=message,
-            priority=self.__priorities.get(
-                type(message), self.__last_priority),
-            timestamp=message.created_at if hasattr(
-                message, 'created_at') else datetime.now()  # TODO: created_at or received_at 問題。継承クラスのpriority問題
-        ))
-
-    def get(self) -> BaseMessage:
-        return self.__queue.get().message
-
-
-class BaseAgent(ABC):
+class BaseTools(ABC):
     @abstractmethod
-    def run(self) -> Generator[BaseMessage, None, None]:
+    def stop(self) -> None:
+        """
+        ツールの実行を停止するメソッド。
+        """
         pass
 
     @abstractmethod
-    def send(self, message: BaseMessage):
+    def save(self) -> None:
+        """
+        ツールの状態を保存するメソッド。
+        """
+        pass
+
+
+
+TTools = TypeVar('TTools', bound=BaseTools)
+class BaseAgent(ABC, Generic[TTools]):
+    @abstractmethod
+    def run(self, tools: BaseTools) -> None:
+        """
+        エージェントのメインロジックを実行するメソッド。
+        Args:
+            tools (BaseTools): エージェントが使用するツールのインスタンス。ツールを介してLLMの実行、他エージェントとの通信、ログの記録などを行う。
+        """
         pass
 
     @abstractmethod
-    def message_types(self) -> list[Type[BaseModel]]:
+    def stop(self) -> None:
+        """
+        エージェントの実行を停止するメソッド。
+        """
         pass
+
+    @abstractmethod
+    def load(self) -> None:
+        """
+        エージェントの状態をロードするメソッド。
+        """
+        pass
+
+    @abstractmethod
+    def save(self) -> None:
+        """
+        エージェントの状態を保存するメソッド。
+        """
+        pass
+
 
 class AgentConfig(BaseModel):
-    def build(self, id_: str) -> BaseAgent:
+    type: str
+    id: str
+
+    def build(self) -> BaseAgent:
+        """Instantiate the concrete agent defined by this configuration."""
+        raise NotImplementedError("AgentConfig.build must be implemented by subclasses")
+
+
+class BaseManager(ABC):
+    @abstractmethod
+    def run(self) -> None:
+        """
+        マネージャーのメインロジックを実行するメソッド。
+        Args:
+            tools (TManagerTools): マネージャーが使用するツールのインスタンス。ツールを介してLLMの実行、他エージェントとの通信、ログの記録などを行う。
+        """
         pass
 
-
-class BaseChannel:
-    pass
-
-
-class ChannelConfig(BaseModel):
-    def build(self, id_: str) -> BaseChannel:
-        pass
-
-
-class AgentManager:
-    def __init__(self, storage_dir: Path, agent_types: list[BaseModel]):
-        self.storage_dir = storage_dir
-        self.agent_types = agent_types
-        self.agent_type_name_to_config_class = {
-            agent_type.model_fields['type'].default: agent_type
-            for agent_type in agent_types
-        }
-
-    def new_id(self) -> str:
-        return "agent_" + str(len(self.agents) + 1)
-
-    def create(self, config: AgentConfig, channels_to_connect: list[str]) -> TaskAgent:
-        id_ = self.new_id()
-        return config.build(id_=id_)
-
-    def find(self, id_: str) -> TaskAgent:
-        # Logic# Logic to find and return a TaskAgent by its ID
-        pass
-
-    def save(self):
-        # Logic# Logic to save the current state of task agents to storage
+    @abstractmethod
+    def save(self) -> None:
+        """
+        マネージャーとその管理下にあるすべてのものを保存するメソッド。
+        """
         pass
 
     @classmethod
-    def initialize_or_load(cls, storage_dir: Path) -> 'TaskAgentManager':
-        # Load existing agents from storage or initialize a new manager
-        return cls()
-
-
-class ChannelManager:
-    def new_id(self) -> str:
-        return "channel_" + str(len(self.agents) + 1)
-
-    def create(self, config: ChannelConfig):
-        return config.build(id_=self.new_id())
-
-    def find(self, id_: str) -> BaseChannel:
-        pass
-
-    def save(self):
-        pass
-
-    @classmethod
-    def initialize_or_load(cls, storage_dir: Path) -> 'ChannelManager':
-        return cls()
-
-
-class AgentManager:
-    def __init__(
-            self,
-            agent_manager: AgentManager,
-            channel_manager: ChannelManager,
-            storage_dir: Path,
-        ):
-        self.agent_manager = agent_manager
-        self.channel_manager = channel_manager
-        self.storage_dir = storage_dir
-
-    def create_agent(self, config: AgentConfig, channels_to_connect: list[str]):
-        return self.agent_manager.create_agent(config, channels_to_connect)
-
-    def create_channel(self, config: ChannelConfig):
-        return self.channel_manager.create(config)
-
-    def find_agent(self, agent_id: str):
-        return self.agent_manager.find_agent(agent_id)
-
-    def find_channel(self, channel_id: str):
-        return self.channel_manager.find(channel_id)
-
-    def save(self):
-        self.agent_manager.save()
-        self.channel_manager.save()
-
-    @classmethod
-    def initialize_or_load(self, storage_dir: Path) -> 'AgentManager':
-        return AgentManager(
-            agent_manager=AgentManager.initialize_or_load(
-                storage_dir/"agents"),
-            channel_manager=ChannelManager.initialize_or_load(
-                storage_dir/"channels"),
-        )
-
-    def run(self, agents, channels):
+    @abstractmethod
+    def initialize_or_load(cls, storage_dir: Path) -> "BaseManager":
+        """
+        ストレージディレクトリからマネージャーを初期化またはロードするクラスメソッド。
+        Args:
+            storage_dir (Path): ストレージディレクトリのパス。
+        Returns:
+            BaseManager: 初期化またはロードされたマネージャーのインスタンス。
+        """
         pass
 
 
+class StandardManagerConfig(ABC, BaseModel):
+    @abstractmethod
+    def get_agent_config_paths(self) -> list[Path]:
+        """
+        マネージャーが管理するエージェントの設定ファイルのパスを返すメソッド。
+        Returns:
+            list[AgentConfig]: エージェントの設定ファイルのパスのリスト。
+        """
+
+    @abstractmethod
+    def get_agent_config_type(self, type_name: str) -> Type[AgentConfig]:
+        """
+        エージェントの設定モデルタイプを取得するメソッド。
+        Args:
+            type_name (str): エージェントのタイプ名。
+        Returns:
+            Type[AgentConfig]: 指定されたタイプ名に対応する設定モデルのクラス。
+        """
+
+
+TManagerConfig = TypeVar('TManagerConfig', bound=StandardManagerConfig)
+TManagerTools = TypeVar('TManagerTools', bound=BaseTools)
+
+class StandardManager(BaseManager, Generic[TManagerConfig, TManagerTools]):
+    def __init__(self, config: TManagerConfig, adapter: Callable[[BaseAgent, TManagerTools], BaseTools]) -> None:
+        """
+        Args:
+            config (TManagerConfig): マネージャーの設定。
+            adapter (Callable[[BaseAgent, TManagerTools], BaseTools]): エージェントにツールを適用するためのアダプター関数。
+        """
+        self.config = config
+        self.agents: list[BaseAgent] = [self._load_agent(config_path) for config_path in config.get_agent_config_paths()]
+        self.adapter = adapter
+
+        self.tools: TManagerTools = self._load_tools()
+        self.agent_processes: list[Process] = []
+        self.stop_event = Event()
+
+
+    def _load_agent(self, config_path: Path) -> BaseAgent:
+        """
+        指定された設定ファイルからエージェントをロードするメソッド。
+        Args:
+            config_path (Path): エージェントの設定ファイルのパス。
+        Returns:
+            BaseAgent: ロードされたエージェントのインスタンス。
+        """
+        raw_text = config_path.read_text()
+        data = json.loads(raw_text)
+        agent_config_type = self.config.get_agent_config_type(data['type'])
+        agent_config = agent_config_type.model_validate_json(raw_text)
+        agent = agent_config.build()
+        agent.load()
+        return agent
+
+    def apply_adapter(self, agent: BaseAgent[TTools]) -> TTools:
+        """
+        エージェントにツールを適用するためのアダプターを適用するメソッド。
+        """
+        return self.adapter(agent, self.tools)
+
+    def run(self) -> None:
+        """
+        標準マネージャーのメインロジックを実行するメソッド。
+        """
+        assert self.agent_processes == [], "Manager is already running."
+        self.agent_processes = [Process(target=agent.run, args=(self.apply_adapter(agent),)) for agent in self.agents]
+        for process in self.agent_processes:
+            print(f"Starting agent process: {process}")
+            process.start()
+
+        self.stop_event.wait()
+        self.tools.stop()
+        for agent in self.agents:
+            agent.stop()
+
+        self.save()
+
+
+    def save(self) -> None:
+        """
+        標準マネージャーとその管理下にあるすべてのものを保存するメソッド。
+        """
+        for agent in self.agents:
+            agent.save()
+
+    @abstractmethod
+    def _load_tools(self) -> TManagerTools:
+        """
+        マネージャーが使用するツールをロードするメソッド。
+        設定はconfigから取得され、ツールのインスタンスが返されます。
+        Returns:
+            TManagerTools: ロードされたツールのインスタンス。
+        """
+        pass
+
+    def create_stop_event_tool(self):
+        """
+        エージェントの実行を停止するためのイベントツールを作成するメソッド。
+        Returns:
+            Event: エージェントの実行を停止するためのイベント。
+        """
+        return lambda: self.stop_event.set()
