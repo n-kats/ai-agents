@@ -1,24 +1,37 @@
-# Agent Development Notes
+# Repository Guidelines
 
-## Concept
-- 基本思想やコンセプトは `docs/concept.md` を参照してください。軽量なマルチエージェント基盤を提供し、プロセス制御や状態管理をフレームワーク側に寄せる設計方針をまとめています。
+## プロジェクト構造 と モジュール
+- コア フレームワーク は `nkaa/framework/` に 集約 され、エージェント・チャネル 抽象 を 提供 します。
+- プリセット と アダプター は `nkaa/presets/` に 置き、新規 エージェント や ツール を 統合 します。
+- レガシー 試作 は `nkaa/research_agent_v1/` と `nkaa/research_agent_v2/`、参照 のみ で 改変 禁止 です。
+- 設計 メモ と チェックリスト は `docs/concept.md` と `docs/implementation_status.md` を 確認 します。
+- ルート 直下 の `pyproject.toml`、`Makefile`、`config.yaml` が 開発 設定 を 管理 します。
 
-## コア構造
-- エージェント／ツール／マネージャの抽象は `nkaa/framework/agent.py:11` 以降で定義されており、`StandardManager` が複数プロセス実行と停止ハンドリングを担当します。
-- チャンネルとメッセージの骨組みは `nkaa/framework/channel.py:18` と `nkaa/framework/messages.py:2` にあります。複数チャンネルを束ねる想定と read/write API の雛形があるものの、実装は未完成です。
-- チャンネル集合をエージェントに注入する `ChannelTools` の雛形は `nkaa/framework/tools.py` にあります。
-- プリセット例は `nkaa/presets/managers/single_agent_model.py:55` にあり、`BaseTools` による依存注入やアダプター利用 (`nkaa/presets/managers/single_agent_model.py:155`) の最小パターンが確認できます。
+## ビルド・テスト・開発 コマンド
+- `uv sync --group dev` で ランタイム と 開発 依存 を まとめて 導入 します。`uv` 無し なら `pip install -e .` 後 に `ruff`、`mypy`、`pytest` を 入れます。
+- `make lint` は Ruff と mypy を 通し、`nkaa/` を 静的 チェック します。
+- `make format` は Ruff フォーマッタ と 自動 修正 を 実行 し コード を 整えます。
+- `make test` や `pytest` で テスト を 実行。個別 対象 は `pytest path/to/module` を 使用 します。
 
-## アダプター利用の意図
-- ツールの受け渡しをカスタマイズするフックとしてアダプターを使用します。設計の背景と利点は `docs/concept.md` の「アダプターの役割と利点」を参照してください。
+## コーディング 規約 と 命名
+- インデント は 4 スペース、行長 は 120 文字 以下、`ruff format` が ダブル クオート と import 順 を 強制 します。
+- モジュール・関数 は snake_case、クラス は CapWords、設定 クラス は `<Role>Config` を 採用 します。
+- 公開 API に 型 注釈 を 付け、`pyproject.toml` の mypy 設定 に 従って 明示 戻り値 を 書きます。
+- 副作用 は マネージャー 層 または ツール 層 に 集約 し、フレームワーク 層 は 宣言 的 に 保ちます。
 
-## 実装状況と課題
-- 進捗チェックリストは `docs/implementation_status.md` にまとめています。未実装箇所や既知の不具合（例: `AgentConfig.build` 未実装、`ChannelManager` スタブなど）を確認できます。
+## テスト 方針
+- pytest を 基本 と し、対象 モジュール 名 と 対応 テスト 名 (`agent.py` ↔ `test_agent.py`) を 揃えます。
+- チャネル キュー、マネージャー ライフサイクル、アダプター 経路 の 正常 系 と 例外 系 を カバー します。
+- LLM や I/O 依存 は プリセット 内 フェイク ツール で 代替 し テスト を 決定的 に します。
+- バグ 修正 では 回帰 テスト を 追加 し、`make test` 成果 を PR 説明 に 記載 します。
 
-## 作業ガイドライン
-1. 新しいエージェントを追加する際は、`AgentConfig.build` 周りの不足を解消しつつ、`StandardManager` とアダプター経由でツールを注入する流れを踏襲してください。
-2. チャンネル機能を拡張する場合は、read/write API と優先度付きキューの既存骨組みを活かしつつ、`ChannelManager` の永続化・検索ロジックを実装してください。
-3. 実運用を見据えたツール（LLM クライアント、入力処理、ログ周りなど）は `nkaa/presets/tools/` のダミー実装を置き換える形で追加してください。
+## コミット と Pull Request
+- コミット メッセージ は 命令形 と スコープ 接頭辞 (`framework: add channel persistence`) を 使い、`wip` を 避けます。
+- PR 前 に rebase か squash で 履歴 を 整理 し 差分 を 明瞭 に します。
+- PR 説明 には 目的、変更 点、検証 (`make lint && make test`) を 記し、関連 Issue や ドキュメント を 紐付けます。
+- ユーザー 影響 が 見える 変更 では ログ や スクリーンショット を 添付 します。
 
-## 関連メモ
-- 旧実装 (`nkaa/research_agent_v1` / `nkaa/research_agent_v2`) は設計検討用の履歴であり、現行方針の直接参照は不要です。整理方針は `docs/implementation_status.md` の「Legacy Artifacts」を参照してください。
+## エージェント と チャネル の 実装 ヒント
+- 実装 前 に `docs/concept.md` と `docs/implementation_status.md` の 未完 事項 を 確認 し 方針 を 整えます。
+- 新規 エージェント は `StandardManager` と `nkaa/presets/managers/single_agent_model.py` の アダプター パターン を 再利用 します。
+- 実運用 ツール は `nkaa/presets/tools/` を 拡張 し、設定 オプション と 依存 を ドキュメント に 反映 します。
