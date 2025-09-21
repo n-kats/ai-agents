@@ -30,6 +30,7 @@
 - PR 前 に rebase か squash で 履歴 を 整理 し 差分 を 明瞭 に します。
 - PR 説明 には 目的、変更 点、検証 (`make lint && make test`) を 記し、関連 Issue や ドキュメント を 紐付けます。
 - ユーザー 影響 が 見える 変更 では ログ や スクリーンショット を 添付 します。
+- ファイル 編集 は `cat <<EOF > file` ではなく `apply_patch` 等 の 差分 適用 で 行い、既存 内容 の 破壊 を 避けます。
 
 ## エージェント と チャネル の 実装 ヒント
 - 実装 前 に `docs/concept.md` と `docs/implementation_status.md` の 未完 事項 を 確認 し 方針 を 整えます。
