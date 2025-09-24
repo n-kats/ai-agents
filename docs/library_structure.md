@@ -5,36 +5,43 @@
 ## Mermaid 図
 
 ```mermaid
-graph LR
-    subgraph Framework Core
+graph TB
+    subgraph 抽象層 (Conceptual Contracts)
         agent_api["Agent Abstractions<br/>(BaseAgent, AgentConfig)"]
-        manager_api["Manager Layer<br/>(StandardManager)"]
-        channel_api["Channel System<br/>(ChannelManager, ChannelTools)"]
-        persistence_api["Persistence Layer<br/>(JsonLinesStateMixin など)"]
-        tool_injection["Tool Injection<br/>(ToolAdapter, ChannelTools)"]
-        manager_api --> agent_api
-        manager_api --> channel_api
-        channel_api --> persistence_api
-        agent_api --> tool_injection
+        channel_contracts["Channel Contracts<br/>(ChannelManager API)"]
+        persistence_contracts["Persistence Interfaces<br/>(StateRepository など)"]
     end
 
-    subgraph Presets & Tooling
+    subgraph 実装層 (Core Runtime)
+        manager_layer["StandardManager<br/>(Lifecycle Orchestration)"]
+        channel_runtime["Channel Runtime<br/>(Queue, Search, Snapshot)"]
+        persistence_runtime["Persistence Layer<br/>(JsonLinesStateMixin)"]
+        tool_injection["Tool Injection<br/>(ToolAdapter, ChannelTools)"]
+    end
+
+    subgraph 応用層 (Presets & Extensions)
         presets["Presets Package"]
+        preset_managers["Preset Managers<br/>(single_agent_model)"]
         preset_agents["Preset Agents<br/>(SimpleAgentConfig など)"]
         preset_tools["Preset Tools<br/>(LLMCallTool, InputTool)"]
-        preset_managers["Preset Managers<br/>(single_agent_model)"]
-        presets --> preset_agents
-        presets --> preset_tools
-        presets --> preset_managers
-        preset_managers --> manager_api
-        preset_agents --> agent_api
-        preset_tools --> tool_injection
     end
+
+    agent_api --> manager_layer
+    channel_contracts --> channel_runtime
+    persistence_contracts --> persistence_runtime
+    manager_layer --> tool_injection
+    tool_injection --> channel_runtime
+    channel_runtime --> persistence_runtime
+    manager_layer --> presets
+    presets --> preset_managers
+    presets --> preset_agents
+    presets --> preset_tools
+    preset_managers --> manager_layer
+    preset_agents --> agent_api
+    preset_tools --> tool_injection
 ```
 
 ## コンポーネント概要
-- `Agent Abstractions` : エージェント共通のライフサイクル管理・ツール注入インタフェースを定義し、プリセットや拡張エージェントがここを基盤に構築されます。
-- `Manager Layer` : チャネル管理やエージェントの初期化責務を統合し、プリセットマネージャを通じて利用者が再利用します。
-- `Channel System` : メッセージキュー、チャネル検索、未読管理などの共通処理を提供し、マネージャとエージェント双方から呼び出されます。
-- `Persistence Layer` : エージェント・チャネル両方の状態永続化を担当し、既定実装として JSON Lines ベースのミックスインを用意します。
-- `Presets Package` : 実用的な構成例を束ね、標準マネージャ／エージェント実装とツールセットを差し替え可能にします。
+- **抽象層** (`Agent Abstractions`, `Channel Contracts`, `Persistence Interfaces`) : ライブラリ全体で共有されるインタフェースや契約を提示し、実装層やプリセットが従うべき境界を定義します。
+- **実装層** (`StandardManager`, `Channel Runtime`, `Persistence Layer`, `Tool Injection`) : 抽象層の契約に沿った実装を提供し、ランタイムでのチャネル管理やツール注入を担います。
+- **応用層** (`Presets Package`, `Preset Managers`, `Preset Agents`, `Preset Tools`) : 実装層を組み合わせた再利用可能なセットを提供し、利用者が即座に活用できる構成を提示します。
