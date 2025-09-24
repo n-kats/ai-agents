@@ -6,20 +6,20 @@
 
 ```mermaid
 graph TB
-    subgraph 抽象層 (Conceptual Contracts)
+    subgraph Abstract["抽象層 (Conceptual Contracts)"]
         agent_api["Agent Abstractions<br/>(BaseAgent, AgentConfig)"]
         channel_contracts["Channel Contracts<br/>(ChannelManager API)"]
         persistence_contracts["Persistence Interfaces<br/>(StateRepository など)"]
     end
 
-    subgraph 実装層 (Core Runtime)
+    subgraph CoreRuntime["実装層 (Core Runtime)"]
         manager_layer["StandardManager<br/>(Lifecycle Orchestration)"]
         channel_runtime["Channel Runtime<br/>(Queue, Search, Snapshot)"]
         persistence_runtime["Persistence Layer<br/>(JsonLinesStateMixin)"]
         tool_injection["Tool Injection<br/>(ToolAdapter, ChannelTools)"]
     end
 
-    subgraph 応用層 (Presets & Extensions)
+    subgraph Extensions["応用層 (Presets & Extensions)"]
         presets["Presets Package"]
         preset_managers["Preset Managers<br/>(single_agent_model)"]
         preset_agents["Preset Agents<br/>(SimpleAgentConfig など)"]
