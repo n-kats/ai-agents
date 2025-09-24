@@ -9,30 +9,30 @@ graph LR
     library((NKAA Library))
 
     subgraph Framework Core
-        library --> agent_api[Agent Abstractions\n(BaseAgent, AgentConfig)]
-        library --> manager_api[Manager Layer\n(StandardManager)]
-        library --> channel_api[Channel System\n(ChannelManager, ChannelTools)]
-        library --> persistence_api[Persistence Layer\n(JsonLinesStateMixin など)]
-        agent_api --> tool_injection[Tool Injection\n(ToolAdapter, ChannelTools)]
+        library --> agent_api["Agent Abstractions<br/>(BaseAgent, AgentConfig)"]
+        library --> manager_api["Manager Layer<br/>(StandardManager)"]
+        library --> channel_api["Channel System<br/>(ChannelManager, ChannelTools)"]
+        library --> persistence_api["Persistence Layer<br/>(JsonLinesStateMixin など)"]
+        agent_api --> tool_injection["Tool Injection<br/>(ToolAdapter, ChannelTools)"]
         manager_api --> agent_api
         manager_api --> channel_api
         channel_api --> persistence_api
     end
 
     subgraph Presets & Tooling
-        library --> presets[Presets Package]
-        presets --> preset_agents[Preset Agents\n(SimpleAgentConfig など)]
-        presets --> preset_tools[Preset Tools\n(LLMCallTool, InputTool)]
-        presets --> preset_managers[Preset Managers\n(single_agent_model)]
+        library --> presets["Presets Package"]
+        presets --> preset_agents["Preset Agents<br/>(SimpleAgentConfig など)"]
+        presets --> preset_tools["Preset Tools<br/>(LLMCallTool, InputTool)"]
+        presets --> preset_managers["Preset Managers<br/>(single_agent_model)"]
         preset_managers --> manager_api
         preset_agents --> agent_api
         preset_tools --> tool_injection
     end
 
     subgraph Samples & Legacy
-        library --> samples[Samples]
+        library --> samples["Samples"]
         samples --> presets
-        library --> legacy[Legacy Implementations]
+        library --> legacy["Legacy Implementations"]
         legacy -.-> manager_api
         legacy -.-> agent_api
     end
