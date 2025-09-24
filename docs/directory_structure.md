@@ -9,6 +9,7 @@
 - `docs/meta_plan/` : 共通ガイドラインやポリシー類。プロジェクト横断で再利用可能な内容を配置。
 - `docs/usage/` : `make lint` などのコマンドリファレンス。
 - `docker/` : Docker Compose など環境構築用ファイル（PostgreSQL チャンネル基盤を追加予定）。
+- `samples/` : フレームワークを体験するための最小サンプルコードと手順。
 - `Makefile`, `pyproject.toml`, `uv.lock` : ビルドと依存管理設定。
 - `_cache/`, `_output/`, `_data/` : 実行時生成物やキャッシュ（必要に応じて作成）。
 - `_tmp/` : 一時ファイル群。Codex 用の仮想環境 `_tmp/codex_venv` もここに配置する。
@@ -26,6 +27,8 @@
 - `implementation_status.md` : 実装進捗チェックリスト。
 - `channel_persistence_plan.md` : PostgreSQL を用いたチャンネル永続化案。
 - `channel_spec.md` : チャンネル仕様の決定事項および未解決課題のまとめ。
+- `samples_guideline.md` : `samples/` 配下のサンプル実装方針と運用ルール。
+- `shortcut_continue.md` : 「続けて」指示時に参照すべき資料をまとめたショートカットメモ。
 - `directory_structure.md` : 本ファイル。
 - `meta_plan/` : 共通ガイドライン。
 - `legacy/` : 旧資料。

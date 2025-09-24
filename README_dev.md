@@ -60,10 +60,11 @@
 * プリセット：`nkaa/presets/managers/single_agent_model.py` が単体エージェント例。`SingleAgentTools` に LLM ダミー (`LLMCallTool`)・ログ・入力・停止関数を束ねる。
 * テスト：`tests/framework/test_channels.py` で InMemory リポジトリの送受信・復元・離脱を確認。
 * ドキュメント連携：設計メモは `docs/concept.md`、進捗は `docs/implementation_status.md`、チャンネル仕様は `docs/channel_spec.md` に置いてある。
+* サンプル：`samples/in_memory_channels.py` を `python` で実行すると、`StandardManager` が InMemory チャネルを扱うエージェント群（送信・購読・スナップショット）をロードして協調動作を再現する。
 
 # TODO ラフ
 * PostgreSQL 版 `ChannelRepository`（スキーマ設計：履歴＋未読＋所属）。
-* チャネル探索・招待フローの API 設計（ChannelManager 側か別モジュールか検討）。
+* チャネル探索 API の設計（ChannelManager 側か別モジュールか検討）。
 * `ChannelMessage.payload` のバージョニング/検証ポリシー。後方互換戦略。
 * `HumanInteractionAgent`（CLI/GUI/I/O ツールセット）とプリセット。
 * エンドツーエンド例と API リファレンス（ドキュメント拡充）。

@@ -8,9 +8,8 @@
 
 - [x] チャンネル周りを専用パッケージへ再編し、`ChannelManager`・`ChannelTools`・キュー・リポジトリの責務を整理 (`nkaa/framework/channels/`, `nkaa/framework/tools.py`).
 - [x] PostgreSQL / SQLite 向け `SQLChannelRepository` を追加し、履歴・未読テーブルと `save()` スナップショットの永続化を実装。
-- [ ] エージェントが能動的にチャネル検索・購読できる API 設計（検索、招待、承認フローなど）。
+- [ ] エージェントが能動的にチャネル検索・購読できる API 設計（検索条件やアクセス制御など）。
   - [x] `ChannelSearchQuery`・`ChannelManager.search_channels`・`ChannelTools.search`/`join_matching` を追加し、メタデータ条件での検索と自動参加をサポート。
-  - [ ] 招待・承認フローのモデリングと永続化方法の設計。
 - [ ] メッセージペイロードのバージョニング/検証ルールと後方互換性戦略の策定。
 - [ ] `ChannelManager.snapshot_unread_records()` を活用した未読スナップショット運用ポリシーとクラッシュ復旧手順の整備（暫定的に `ChannelTools.save()` で担当エージェント分を永続化）。
 
@@ -27,7 +26,10 @@
 
 ## Documentation / Examples
 - [ ] ドキュメントはコンセプト草案のみで、API リファレンスや実装ガイドは未整備 (`docs/concept.md`).
+- [x] サンプル実装ガイドラインを整備し、`docs/samples_guideline.md` に方針を集約。
+- [x] LLM 協調サンプルを `samples/llm_delegation.py` として追加し、複数チャネル活用例を提示。
 - [ ] 実行可能なエンドツーエンド例はまだ整っていない。
+- [x] ライブラリ全体構造を説明するマーメイド図を `docs/library_structure.md` に追加。
 
 ## Legacy Artifacts
 - [x] `legacy/research_agent_v1/` と `legacy/research_agent_v2/` に旧試作を集約し、参照専用としてアーカイブした。
