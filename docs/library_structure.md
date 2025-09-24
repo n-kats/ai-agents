@@ -5,49 +5,53 @@
 ## Mermaid 図
 
 ```mermaid
-graph LR
-    subgraph Agents["エージェント系"]
-        agent_api["Agent Abstractions<br/>(BaseAgent, AgentConfig)"]
-        preset_agents["Preset Agents<br/>(SimpleAgentConfig など)"]
+graph TB
+    subgraph AgentsCluster["エージェント系"]
+        agent_contract["抽象: Agent Abstractions<br/>(BaseAgent, AgentConfig)"]
+        agent_impl["具体: Preset Agents<br/>(SimpleAgentConfig など)"]
     end
 
-    subgraph Managers["マネージャ系"]
-        manager_layer["StandardManager<br/>(Lifecycle Orchestration)"]
-        preset_managers["Preset Managers<br/>(single_agent_model)"]
+    subgraph ManagersCluster["マネージャ系"]
+        manager_contract["抽象: BaseManager / ManagerConfig"]
+        manager_impl["具体: StandardManager<br/>+ Preset Managers"]
     end
 
-    subgraph Channels["チャネル系"]
-        channel_contracts["Channel Contracts<br/>(ChannelManager API)"]
-        channel_runtime["Channel Runtime<br/>(Queue, Search, Snapshot)"]
+    subgraph ChannelsCluster["チャネル系"]
+        channel_contract["抽象: Channel Contracts<br/>(ChannelManager API)"]
+        channel_impl["具体: Channel Runtime<br/>(Queue, Search, Snapshot)"]
     end
 
-    subgraph Persistence["永続化系"]
-        persistence_contracts["Persistence Interfaces<br/>(StateRepository など)"]
-        persistence_runtime["Persistence Layer<br/>(JsonLinesStateMixin)"]
+    subgraph PersistenceCluster["永続化系"]
+        persistence_contract["抽象: Persistence Interfaces<br/>(StateRepository など)"]
+        persistence_impl["具体: Persistence Layer<br/>(JsonLinesStateMixin)"]
     end
 
-    subgraph Tooling["ツール系"]
-        tool_injection["Tool Injection<br/>(ToolAdapter, ChannelTools)"]
-        preset_tools["Preset Tools<br/>(LLMCallTool, InputTool)"]
+    subgraph ToolingCluster["ツール系"]
+        tool_contract["抽象: Tool Injection API<br/>(ToolAdapter, ChannelTools)"]
+        tool_impl["具体: Preset Tools<br/>(LLMCallTool, InputTool)"]
     end
 
-    agent_api -->|初期化要求| manager_layer
-    manager_layer -->|ライフサイクル制御| agent_api
-    manager_layer -->|チャネル管理| channel_runtime
-    channel_contracts -->|契約提示| channel_runtime
-    channel_runtime -->|状態保存| persistence_runtime
-    persistence_contracts -->|契約提示| persistence_runtime
-    agent_api -->|ツール要求| tool_injection
-    tool_injection -->|チャネル操作| channel_runtime
-    preset_managers -->|実装連携| manager_layer
-    preset_agents -->|実装連携| agent_api
-    preset_tools -->|実装連携| tool_injection
+    manager_contract -->|初期化契約| agent_contract
+    manager_impl -->|ライフサイクル制御| agent_impl
+    manager_contract -->|チャネル契約| channel_contract
+    manager_impl -->|チャネル管理| channel_impl
+    channel_contract -->|契約提示| channel_impl
+    channel_impl -->|状態保存| persistence_impl
+    persistence_contract -->|契約提示| persistence_impl
+    agent_contract -->|ツール要求| tool_contract
+    tool_contract -->|供給| tool_impl
+    tool_impl -->|利用支援| agent_impl
+    manager_impl -->|ツール注入| tool_contract
+    agent_contract -->|準拠| agent_impl
+    manager_contract -->|準拠| manager_impl
+    channel_contract -->|準拠| channel_impl
+    persistence_contract -->|準拠| persistence_impl
+    tool_contract -->|準拠| tool_impl
 ```
 
 ## コンポーネント概要
-- **エージェント系** (`Agent Abstractions`, `Preset Agents`) : エージェントのライフサイクル定義とプリセットによる具体的な初期化方法を提供します。
-- **マネージャ系** (`StandardManager`, `Preset Managers`) : 複数チャネルやエージェントの制御を担い、プリセットで即利用できる orchestration を定義します。
-- **チャネル系** (`Channel Contracts`, `Channel Runtime`) : メッセージキューや検索・参加処理を束ね、マネージャから呼び出される具体実装を提供します。
-- **永続化系** (`Persistence Interfaces`, `Persistence Layer`) : チャネルやエージェント状態の保存契約と既定実装を示し、ランタイムが永続化戦略を切り替えやすくします。
-- **ツール系** (`Tool Injection`, `Preset Tools`) : エージェントへツール群を注入する仕組みと、プリセットで用意した代表的なツール実装をまとめています。
-- **プリセット基盤** (`Presets Package`) : 個別概念を組み合わせた構成テンプレートを提供し、利用者が設定なしでフレームワークを試せるようにします。
+- **エージェント系**：`BaseAgent`・`AgentConfig` などの抽象契約を起点に、`SimpleAgentConfig` などプリセットエージェントが具体実装として従います。
+- **マネージャ系**：`BaseManager` とその設定契約を基礎とし、`StandardManager` やプリセットマネージャがオーケストレーションを担います。
+- **チャネル系**：`ChannelManager` API などの契約が、優先度キューや検索・参加処理を備えたランタイム実装へつながります。
+- **永続化系**：`StateRepository` などの抽象化に対し、`JsonLinesStateMixin` を代表とする実装が状態保存を実現します。
+- **ツール系**：`ToolAdapter` や `ChannelTools` の契約が、`LLMCallTool` などプリセットツールを通じてエージェントへ機能を供給します。
