@@ -31,10 +31,6 @@ graph LR
         preset_tools["Preset Tools<br/>(LLMCallTool, InputTool)"]
     end
 
-    subgraph Presets["プリセット基盤"]
-        presets["Presets Package"]
-    end
-
     agent_api -->|初期化要求| manager_layer
     manager_layer -->|ライフサイクル制御| agent_api
     manager_layer -->|チャネル管理| channel_runtime
@@ -43,13 +39,9 @@ graph LR
     persistence_contracts -->|契約提示| persistence_runtime
     agent_api -->|ツール要求| tool_injection
     tool_injection -->|チャネル操作| channel_runtime
-    presets -->|構成提供| preset_managers
-    presets -->|構成提供| preset_agents
-    presets -->|構成提供| preset_tools
     preset_managers -->|実装連携| manager_layer
     preset_agents -->|実装連携| agent_api
     preset_tools -->|実装連携| tool_injection
-    presets -->|契約参照| agent_api
 ```
 
 ## コンポーネント概要
