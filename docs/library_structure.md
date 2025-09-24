@@ -26,19 +26,19 @@ graph TB
         preset_tools["Preset Tools<br/>(LLMCallTool, InputTool)"]
     end
 
-    agent_api --> manager_layer
-    channel_contracts --> channel_runtime
-    persistence_contracts --> persistence_runtime
-    manager_layer --> tool_injection
-    tool_injection --> channel_runtime
-    channel_runtime --> persistence_runtime
-    manager_layer --> presets
-    presets --> preset_managers
-    presets --> preset_agents
-    presets --> preset_tools
-    preset_managers --> manager_layer
-    preset_agents --> agent_api
-    preset_tools --> tool_injection
+    agent_api -->|契約提示| manager_layer
+    channel_contracts -->|契約提示| channel_runtime
+    persistence_contracts -->|契約提示| persistence_runtime
+    manager_layer -->|ライフサイクル制御| tool_injection
+    tool_injection -->|ツール注入| channel_runtime
+    channel_runtime -->|状態保存| persistence_runtime
+    manager_layer -->|プリセット基盤| presets
+    presets -->|構成提供| preset_managers
+    presets -->|構成提供| preset_agents
+    presets -->|構成提供| preset_tools
+    preset_managers -->|具体化| manager_layer
+    preset_agents -->|実装連携| agent_api
+    preset_tools -->|実装連携| tool_injection
 ```
 
 ## コンポーネント概要
