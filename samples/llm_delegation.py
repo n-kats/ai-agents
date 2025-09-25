@@ -3,11 +3,9 @@
 from __future__ import annotations
 
 import json
-import os
-import threading
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Any, Iterable, Literal, Type
+from typing import Any, Callable, Iterable, Literal, Type, cast
 
 from pydantic import BaseModel, Field
 
@@ -17,6 +15,7 @@ from nkaa.framework.agent import (
     BaseTools,
     StandardManager,
     StandardManagerConfig,
+    ThreadingManagerExecutionBackend,
 )
 from nkaa.framework.channels import (
     ChannelManager,
@@ -25,46 +24,8 @@ from nkaa.framework.channels import (
     InMemoryChannelRepository,
 )
 from nkaa.framework.tools import ChannelTools
-
-# `multiprocessing.Event` が利用できない環境向けに `StandardManager` が参照する
-# イベント実装を `threading.Event` へ差し替える。
-import nkaa.framework.agent as agent_module
-
-
-agent_module.Event = threading.Event
-
-
-try:
-    from openai import OpenAI
-except ImportError as exc:  # pragma: no cover - 依存が無い場合の補助メッセージ
-    OpenAI = None  # type: ignore[assignment]
-    _OPENAI_IMPORT_ERROR = exc
-else:
-    _OPENAI_IMPORT_ERROR = None
-
-
-_OPENAI_CLIENT: Any = None
-
-
-def get_openai_client() -> Any:
-    """OpenAI クライアントを初期化して返す。"""
-
-    if OpenAI is None:
-        raise RuntimeError(
-            "openai パッケージが見つかりません。`pip install openai` を実行してください。"
-        ) from _OPENAI_IMPORT_ERROR
-
-    api_key = os.getenv("OPENAI_API_KEY")
-    if not api_key:
-        raise RuntimeError(
-            "OPENAI_API_KEY が設定されていません。OpenAI の API キーを環境変数に設定してください。"
-        )
-
-    global _OPENAI_CLIENT
-    if _OPENAI_CLIENT is None:
-        _OPENAI_CLIENT = OpenAI(api_key=api_key)
-    return _OPENAI_CLIENT
-
+from nkaa.presets.agents import StdIOHumanAgentConfig, StdIOHumanAgentTools
+from nkaa.presets.tools import LLMCallTool
 
 OUTLINE_RESPONSE_SCHEMA: dict[str, Any] = {
     "name": "DelegationOutline",
@@ -136,13 +97,11 @@ class AnalysisResult:
     assumptions: list[str]
 
 
-def generate_analysis_outline(prompt: str, model: str) -> str:
+def generate_analysis_outline(llm: LLMCallTool, prompt: str, model: str) -> str:
     """フロント担当が分析者向けに依頼内容を要約する。"""
 
-    client = get_openai_client()
-    response = client.responses.create(
-        model=model,
-        input=[
+    response = llm.create_response(
+        [
             {
                 "role": "system",
                 "content": (
@@ -155,12 +114,13 @@ def generate_analysis_outline(prompt: str, model: str) -> str:
             },
             {"role": "user", "content": prompt},
         ],
+        model_name=model,
         response_format={
             "type": "json_schema",
             "json_schema": OUTLINE_RESPONSE_SCHEMA,
         },
     )
-    outline = _extract_output_text(response)
+    outline = llm.extract_output_text(response)
     if not outline:
         raise RuntimeError("LLM から分析用ブリーフが返りませんでした。")
     try:
@@ -179,13 +139,13 @@ def generate_analysis_outline(prompt: str, model: str) -> str:
     return "\n".join(lines)
 
 
-def generate_summary(original_prompt: str, outline: str, model: str) -> AnalysisResult:
+def generate_summary(
+    llm: LLMCallTool, original_prompt: str, outline: str, model: str
+) -> AnalysisResult:
     """分析担当が最終サマリーと結論を生成する。"""
 
-    client = get_openai_client()
-    response = client.responses.create(
-        model=model,
-        input=[
+    response = llm.create_response(
+        [
             {
                 "role": "system",
                 "content": (
@@ -208,13 +168,14 @@ def generate_summary(original_prompt: str, outline: str, model: str) -> Analysis
                 ),
             },
         ],
+        model_name=model,
         response_format={
             "type": "json_schema",
             "json_schema": SUMMARY_RESPONSE_SCHEMA,
         },
         max_output_tokens=600,
     )
-    text = _extract_output_text(response)
+    text = llm.extract_output_text(response)
     if not text:
         raise RuntimeError("LLM からサマリー出力が得られませんでした。")
     try:
@@ -252,87 +213,6 @@ def generate_summary(original_prompt: str, outline: str, model: str) -> Analysis
     )
 
 
-def _extract_output_text(response: Any) -> str:
-    """Responses API からテキスト出力を可能な限り抽出するヘルパ。"""
-
-    if hasattr(response, "output_text") and response.output_text:
-        return str(response.output_text).strip()
-
-    def _maybe_text(node: Any) -> str | None:
-        if node is None:
-            return None
-        if isinstance(node, str):
-            return node
-        if isinstance(node, (list, tuple)):
-            parts: list[str] = []
-            for item in node:
-                maybe = _maybe_text(item)
-                if maybe:
-                    parts.append(maybe)
-            if parts:
-                return "\n".join(parts)
-            return None
-        if isinstance(node, dict):
-            if "value" in node and isinstance(node["value"], str):
-                return node["value"]
-            if "text" in node:
-                return _maybe_text(node["text"])
-            if "content" in node:
-                return _maybe_text(node["content"])
-            parts: list[str] = []
-            for value in node.values():
-                maybe = _maybe_text(value)
-                if maybe:
-                    parts.append(maybe)
-            if parts:
-                return "\n".join(parts)
-            return None
-        if hasattr(node, "value") and isinstance(getattr(node, "value"), str):
-            return getattr(node, "value")
-        if hasattr(node, "text"):
-            return _maybe_text(getattr(node, "text"))
-        if hasattr(node, "content"):
-            return _maybe_text(getattr(node, "content"))
-        if hasattr(node, "model_dump"):
-            return _maybe_text(node.model_dump())  # type: ignore[arg-type]
-        return None
-
-    parts: list[str] = []
-
-    output = getattr(response, "output", None)
-    if output:
-        for item in output:
-            maybe = _maybe_text(getattr(item, "content", None))
-            if maybe:
-                parts.append(maybe)
-
-    if not parts:
-        data = getattr(response, "data", None)
-        if data:
-            for item in data:
-                maybe = _maybe_text(getattr(item, "content", None))
-                if maybe:
-                    parts.append(maybe)
-
-    if not parts and hasattr(response, "choices"):
-        for choice in getattr(response, "choices", []):
-            maybe = _maybe_text(getattr(choice, "message", None))
-            if maybe:
-                parts.append(maybe)
-
-    if not parts and hasattr(response, "model_dump"):
-        dumped = response.model_dump()  # type: ignore[attr-defined]
-        maybe = _maybe_text(dumped)
-        if maybe:
-            parts.append(maybe)
-
-    aggregated = "\n".join(part.strip() for part in parts if part)
-    if aggregated.strip():
-        return aggregated.strip()
-
-    return str(response)
-
-
 # ---------------------------------------------------------------------------
 # ツールと共通ユーティリティ
 # ---------------------------------------------------------------------------
@@ -341,32 +221,29 @@ def _extract_output_text(response: Any) -> str:
 @dataclass
 class DelegationManagerTools(BaseTools):
     channel_manager: ChannelManager
+    llm: LLMCallTool
+    stop_manager: Callable[[], None] | None = None
 
     def stop(self) -> None:
-        return None
+        self.llm.stop()
 
     def save(self) -> None:
-        return None
-
-
-@dataclass
-class DelegationAgentTools(BaseTools):
-    channels: ChannelTools
-
-    def stop(self) -> None:
-        return None
-
-    def save(self) -> None:
-        return None
+        self.llm.save()
 
 
 def delegation_adapter(
-    agent: BaseAgent[DelegationAgentTools],
+    agent: BaseAgent[StdIOHumanAgentTools],
     manager_tools: DelegationManagerTools,
-) -> DelegationAgentTools:
+) -> StdIOHumanAgentTools:
     channel_tools = ChannelTools(
-        agent_id=agent.agent_id, manager=manager_tools.channel_manager)
-    return DelegationAgentTools(channels=channel_tools)
+        agent_id=agent.agent_id,
+        manager=manager_tools.channel_manager,
+    )
+    tools = StdIOHumanAgentTools(channels=channel_tools)
+    attach_llm = getattr(agent, "attach_llm_tool", None)
+    if callable(attach_llm):
+        attach_llm(manager_tools.llm)
+    return tools
 
 
 class ChannelDescriptor(BaseModel):
@@ -382,20 +259,50 @@ class ChannelDescriptor(BaseModel):
         )
 
 
-def ensure_channel(descriptor: ChannelDescriptor, tools: DelegationAgentTools) -> str:
+def ensure_channel(descriptor: ChannelDescriptor, tools: StdIOHumanAgentTools) -> str:
     existing = tools.channels.search(
         ChannelSearchQuery(name=descriptor.name,
                            attributes=descriptor.attributes)
     )
+    created = False
     if existing:
-        return existing[0].id
-    channel = tools.channels.manager.create(descriptor.to_config())
-    return channel.id
+        channel_id = existing[0].id
+    else:
+        channel = tools.channels.manager.create(descriptor.to_config())
+        channel_id = channel.id
+        created = True
+
+    if channel_id not in tools.channels.joined_channels():
+        tools.channels.join(channel_id)
+
+    if created:
+        description = descriptor.description or f"{descriptor.name} のディスカッション"
+        attributes_summary = "、".join(
+            f"{key}={value}" for key, value in sorted(descriptor.attributes.items())
+        )
+        guidance_lines = [f"チャンネルテーマ: {description}"]
+        if attributes_summary:
+            guidance_lines.append(f"属性: {attributes_summary}")
+        guidance_lines.append("このチャンネルの目的に沿った最初のメッセージを投稿してください。")
+
+        tools.channels.send(
+            channel_id,
+            {
+                "role": "system",
+                "prompt": "\n".join(guidance_lines),
+                "channel_name": descriptor.name,
+            },
+            metadata={"seed_message": True},
+        )
+
+    return channel_id
 
 
-class BaseDelegationAgent(BaseAgent[DelegationAgentTools]):
+class BaseDelegationAgent(BaseAgent[StdIOHumanAgentTools]):
     def __init__(self, agent_id: str) -> None:
         self.agent_id = agent_id
+        self._stop_manager: Callable[[], None] = lambda: None
+        self._llm_tool: LLMCallTool | None = None
 
     def stop(self) -> None:
         return None
@@ -406,136 +313,24 @@ class BaseDelegationAgent(BaseAgent[DelegationAgentTools]):
     def save(self) -> None:
         return None
 
+    def attach_stop_manager(self, stop_manager: Callable[[], None]) -> None:
+        self._stop_manager = stop_manager
+
+    def trigger_stop_manager(self) -> None:
+        self._stop_manager()
+
+    def attach_llm_tool(self, llm_tool: LLMCallTool) -> None:
+        self._llm_tool = llm_tool
+
+    def _require_llm_tool(self) -> LLMCallTool:
+        if self._llm_tool is None:
+            raise RuntimeError("LLMCallTool がアタッチされていません。")
+        return self._llm_tool
+
 
 # ---------------------------------------------------------------------------
 # エージェント実装
 # ---------------------------------------------------------------------------
-
-
-class HumanOperator(BaseDelegationAgent):
-    """標準入力から依頼を受け付け、結果を標準出力へ表示するエージェント。"""
-
-    def __init__(
-        self,
-        agent_id: str,
-        channel: ChannelDescriptor,
-        tasks: list[dict[str, str]] | None = None,
-    ) -> None:
-        super().__init__(agent_id)
-        self.channel_descriptor = channel
-        self.initial_tasks = list(tasks or [])
-        self._seeded = False
-        self._manual_request_index = 1
-
-    def run(self, tools: DelegationAgentTools) -> None:
-        channel_id = ensure_channel(self.channel_descriptor, tools)
-        tools.channels.join(channel_id)
-
-        if not self._seeded:
-            tasks = list(self.initial_tasks)
-            if not tasks:
-                tasks = self._collect_tasks_from_stdin()
-            if not tasks:
-                print("[Human] 入力された依頼がありません。", flush=True)
-                self._seeded = True
-                return
-            self._seed_requests(channel_id, tools, tasks)
-            self._seeded = True
-            return
-
-        self._read_responses(channel_id, tools)
-
-    def _seed_requests(
-        self,
-        channel_id: str,
-        tools: DelegationAgentTools,
-        tasks: list[dict[str, str]],
-    ) -> None:
-        for task in tasks:
-            prompt = task.get("prompt", "").strip()
-            if not prompt:
-                continue
-            request_id = task.get("request_id") or self._generate_request_id()
-            payload = {
-                "role": "human",
-                "request_id": request_id,
-                "prompt": prompt,
-            }
-            stored = tools.channels.send(channel_id, payload)
-            print(
-                f"[Human] request #{stored.message_id} ({payload['request_id']}): {payload['prompt']}",
-                flush=True,
-            )
-
-    def _collect_tasks_from_stdin(self) -> list[dict[str, str]]:
-        print(
-            "[Human] 依頼内容を1行ずつ入力してください（空行で終了）:",
-            flush=True,
-        )
-        tasks: list[dict[str, str]] = []
-        while True:
-            try:
-                prompt = input("> ").strip()
-            except EOFError:
-                break
-            if not prompt:
-                break
-            tasks.append({"prompt": prompt})
-        return tasks
-
-    def _generate_request_id(self) -> str:
-        request_id = f"input-{self._manual_request_index:03d}"
-        self._manual_request_index += 1
-        return request_id
-
-    def _read_responses(self, channel_id: str, tools: DelegationAgentTools) -> None:
-        received = False
-        while True:
-            message = tools.channels.read(channels=[channel_id])
-            if message is None:
-                break
-
-            payload = message.payload
-            if payload.get("role") != "assistant":
-                continue
-
-            received = True
-            request_id = payload.get("request_id", "unknown")
-            summary = str(payload.get("summary", "")).strip()
-            conclusion = str(payload.get("conclusion", "")).strip()
-            action_items = [
-                str(item).strip() for item in payload.get("action_items", []) if str(item).strip()
-            ]
-            risks = [
-                str(item).strip() for item in payload.get("risks", []) if str(item).strip()
-            ]
-            assumptions = [
-                str(item).strip() for item in payload.get("assumptions", []) if str(item).strip()
-            ]
-
-            print(f"[Human] response for {request_id}:", flush=True)
-            if summary:
-                print("  概要:", flush=True)
-                for line in summary.splitlines():
-                    print(f"    {line}", flush=True)
-            if action_items:
-                print("  推奨アクション:", flush=True)
-                for item in action_items:
-                    print(f"    - {item}", flush=True)
-            if risks:
-                print("  リスク・注意点:", flush=True)
-                for item in risks:
-                    print(f"    - {item}", flush=True)
-            if assumptions:
-                print("  前提・確認事項:", flush=True)
-                for item in assumptions:
-                    print(f"    - {item}", flush=True)
-            if conclusion:
-                print(f"  結論: {conclusion}", flush=True)
-            print("", flush=True)
-
-        if not received:
-            print("[Human] 未処理の応答はありません。", flush=True)
 
 
 class FrontDeskAgent(BaseDelegationAgent):
@@ -556,7 +351,8 @@ class FrontDeskAgent(BaseDelegationAgent):
         self.completed: set[str] = set()
         self.pending: dict[str, dict[str, str]] = {}
 
-    def run(self, tools: DelegationAgentTools) -> None:
+    def run(self, tools: StdIOHumanAgentTools) -> None:
+        llm = self._require_llm_tool()
         human_channel_id = ensure_channel(self.human_channel_descriptor, tools)
         analysis_channel_id = ensure_channel(
             self.analysis_channel_descriptor, tools)
@@ -565,30 +361,37 @@ class FrontDeskAgent(BaseDelegationAgent):
         tools.channels.join(analysis_channel_id)
 
         self._forward_human_requests(
-            tools, human_channel_id, analysis_channel_id)
+            llm, tools, human_channel_id, analysis_channel_id)
         self._deliver_summaries(tools, human_channel_id, analysis_channel_id)
 
     def _forward_human_requests(
         self,
-        tools: DelegationAgentTools,
+        llm: LLMCallTool,
+        tools: StdIOHumanAgentTools,
         human_channel_id: str,
         analysis_channel_id: str,
     ) -> None:
-        while True:
-            message = tools.channels.read(channels=[human_channel_id])
+        idle_cycles = 0
+        max_idle_cycles = 5
+        while idle_cycles < max_idle_cycles:
+            message = tools.channels.read(
+                channels=[human_channel_id], block=True, timeout=1.0
+            )
             if message is None:
-                break
+                idle_cycles += 1
+                continue
 
+            idle_cycles = 0
             payload = message.payload
-            if payload.get("role") != "human":
+            if not isinstance(payload, dict) or payload.get("role") != "human":
                 continue
 
-            request_id = payload["request_id"]
-            if request_id in self.forwarded:
+            request_id = payload.get("request_id")
+            if not request_id or request_id in self.forwarded:
                 continue
 
-            prompt = payload["prompt"]
-            outline = generate_analysis_outline(prompt, self.outline_model)
+            prompt = payload.get("prompt", "")
+            outline = generate_analysis_outline(llm, prompt, self.outline_model)
             analysis_payload = {
                 "role": "analysis_request",
                 "request_id": request_id,
@@ -603,21 +406,27 @@ class FrontDeskAgent(BaseDelegationAgent):
 
     def _deliver_summaries(
         self,
-        tools: DelegationAgentTools,
+        tools: StdIOHumanAgentTools,
         human_channel_id: str,
         analysis_channel_id: str,
     ) -> None:
-        while True:
-            message = tools.channels.read(channels=[analysis_channel_id])
+        idle_cycles = 0
+        max_idle_cycles = 5
+        while idle_cycles < max_idle_cycles:
+            message = tools.channels.read(
+                channels=[analysis_channel_id], block=True, timeout=1.0
+            )
             if message is None:
-                break
-
-            payload = message.payload
-            if payload.get("role") != "analysis_summary":
+                idle_cycles += 1
                 continue
 
-            request_id = payload["request_id"]
-            if request_id in self.completed:
+            idle_cycles = 0
+            payload = message.payload
+            if not isinstance(payload, dict) or payload.get("role") != "analysis_summary":
+                continue
+
+            request_id = payload.get("request_id")
+            if not request_id or request_id in self.completed:
                 continue
 
             original_prompt = self.pending.get(
@@ -634,10 +443,14 @@ class FrontDeskAgent(BaseDelegationAgent):
             }
             tools.channels.send(human_channel_id, summary_payload)
             self.completed.add(request_id)
+            self.pending.pop(request_id, None)
             print(
                 f"[FrontDesk] delivered summary for {request_id} back to human channel",
                 flush=True,
             )
+
+            if not self.pending:
+                self.trigger_stop_manager()
 
 
 class AnalystAgent(BaseDelegationAgent):
@@ -649,27 +462,34 @@ class AnalystAgent(BaseDelegationAgent):
         self.model = model
         self.processed: set[str] = set()
 
-    def run(self, tools: DelegationAgentTools) -> None:
+    def run(self, tools: StdIOHumanAgentTools) -> None:
+        llm = self._require_llm_tool()
         analysis_channel_id = ensure_channel(
             self.analysis_channel_descriptor, tools)
         tools.channels.join(analysis_channel_id)
 
-        while True:
-            message = tools.channels.read(channels=[analysis_channel_id])
+        idle_cycles = 0
+        max_idle_cycles = 5
+        while idle_cycles < max_idle_cycles:
+            message = tools.channels.read(
+                channels=[analysis_channel_id], block=True, timeout=1.0
+            )
             if message is None:
-                break
-
-            payload = message.payload
-            if payload.get("role") != "analysis_request":
+                idle_cycles += 1
                 continue
 
-            request_id = payload["request_id"]
-            if request_id in self.processed:
+            idle_cycles = 0
+            payload = message.payload
+            if not isinstance(payload, dict) or payload.get("role") != "analysis_request":
+                continue
+
+            request_id = payload.get("request_id")
+            if not request_id or request_id in self.processed:
                 continue
 
             outline = payload.get("outline", "")
             original_prompt = payload.get("original_prompt", outline)
-            result = generate_summary(original_prompt, outline, self.model)
+            result = generate_summary(llm, original_prompt, outline, self.model)
             response_payload = {
                 "role": "analysis_summary",
                 "request_id": request_id,
@@ -687,15 +507,6 @@ class AnalystAgent(BaseDelegationAgent):
 # ---------------------------------------------------------------------------
 # AgentConfig 実装
 # ---------------------------------------------------------------------------
-
-
-class HumanOperatorConfig(AgentConfig):
-    type: Literal["human_operator"] = "human_operator"
-    channel: ChannelDescriptor
-    tasks: list[dict[str, str]] = Field(default_factory=list)
-
-    def build(self) -> HumanOperator:
-        return HumanOperator(agent_id=self.id, channel=self.channel, tasks=self.tasks)
 
 
 class FrontDeskAgentConfig(AgentConfig):
@@ -723,7 +534,7 @@ class AnalystAgentConfig(AgentConfig):
 
 
 AGENT_TYPE_REGISTRY: dict[str, Type[AgentConfig]] = {
-    "human_operator": HumanOperatorConfig,
+    "stdio_human": StdIOHumanAgentConfig,
     "front_desk": FrontDeskAgentConfig,
     "analyst": AnalystAgentConfig,
 }
@@ -742,19 +553,40 @@ class DelegationManagerConfig(StandardManagerConfig):
             raise ValueError(f"Unknown agent type: {type_name}") from exc
 
 
-class DelegationManager(
-    StandardManager[DelegationManagerConfig,
-                    DelegationManagerTools, DelegationAgentTools]
-):
-    def _load_tools(self) -> DelegationManagerTools:
+def create_delegation_manager(config_dir: Path) -> StandardManager[
+    DelegationManagerConfig, DelegationManagerTools, StdIOHumanAgentTools
+]:
+    config = DelegationManagerConfig(config_dir=config_dir)
+
+    def _load_tools(self: StandardManager[
+        DelegationManagerConfig, DelegationManagerTools, StdIOHumanAgentTools
+    ]) -> DelegationManagerTools:
         repository = InMemoryChannelRepository()
         manager = ChannelManager(repository)
-        return DelegationManagerTools(channel_manager=manager)
+        llm_tool = LLMCallTool()
+        return DelegationManagerTools(channel_manager=manager, llm=llm_tool)
 
-    @classmethod
-    def initialize_or_load(cls, storage_dir: Path) -> "DelegationManager":
-        config = DelegationManagerConfig(config_dir=storage_dir)
-        return cls(config, delegation_adapter)
+    manager_obj = cast(
+        StandardManager[DelegationManagerConfig, DelegationManagerTools, StdIOHumanAgentTools],
+        object.__new__(StandardManager),
+    )
+    bound_loader = _load_tools.__get__(manager_obj, StandardManager)  # type: ignore[arg-type]
+    setattr(manager_obj, "_load_tools", bound_loader)
+    StandardManager.__init__(
+        manager_obj,
+        config,
+        delegation_adapter,
+        execution_backend=ThreadingManagerExecutionBackend(),
+    )
+
+    if isinstance(manager_obj.tools, DelegationManagerTools):
+        stop_manager = manager_obj.create_stop_event_tool()
+        manager_obj.tools.stop_manager = stop_manager
+        for agent in manager_obj.agents:
+            attach = getattr(agent, "attach_stop_manager", None)
+            if callable(attach):
+                attach(stop_manager)
+    return manager_obj
 
 
 # ---------------------------------------------------------------------------
@@ -768,6 +600,8 @@ def _write_config(path: Path, data: dict[str, Any]) -> None:
 
 def prepare_configs(base_dir: Path) -> None:
     base_dir.mkdir(parents=True, exist_ok=True)
+    history_dir = base_dir / "history"
+    history_dir.mkdir(parents=True, exist_ok=True)
 
     human_channel = {
         "name": "human_support",
@@ -782,11 +616,12 @@ def prepare_configs(base_dir: Path) -> None:
 
     configs: Iterable[tuple[str, dict[str, Any]]] = [
         (
-            "01_human_operator.json",
+            "01_stdio_human.json",
             {
-                "type": "human_operator",
+                "type": "stdio_human",
                 "id": "human",
-                "channel": human_channel,
+                "response_role": "human",
+                "history_dir": str(history_dir),
             },
         ),
         (
@@ -817,22 +652,20 @@ def prepare_configs(base_dir: Path) -> None:
 def run_demo() -> None:
     config_dir = Path("_tmp/samples/llm_delegation")
     prepare_configs(config_dir)
+    manager = create_delegation_manager(config_dir)
 
-    manager = DelegationManager.initialize_or_load(config_dir)
     agents = {agent.agent_id: agent for agent in manager.agents}
+    front_desk_config_path = config_dir / "02_front_desk.json"
+    if front_desk_config_path.exists():
+        config_data = json.loads(front_desk_config_path.read_text())
+        human_channel_cfg = config_data.get("human_channel")
+        if isinstance(human_channel_cfg, dict) and "human" in agents:
+            human_descriptor = ChannelDescriptor.model_validate(human_channel_cfg)
+            human_tools = manager.apply_adapter(agents["human"])
+            human_channel_id = ensure_channel(human_descriptor, human_tools)
+            human_tools.channels.join(human_channel_id)
 
-    def execute(agent_id: str) -> None:
-        agent = agents[agent_id]
-        tools = manager.apply_adapter(agent)
-        agent.run(tools)
-
-    execute("front_agent")
-    execute("analyst_agent")
-    execute("human")
-    execute("front_agent")
-    execute("analyst_agent")
-    execute("front_agent")
-    execute("human")
+    manager.run()
 
 
 if __name__ == "__main__":

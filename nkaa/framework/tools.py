@@ -114,6 +114,15 @@ class ChannelTools(BaseTools):
 
         return tuple(self.manager.search_channels(query))
 
+    def get_channel_name(self, channel_id: str) -> str:
+        """チャンネルIDから表示用名称を取得する（未登録ならIDを返す）。"""
+
+        try:
+            metadata = self.manager.find(channel_id).metadata
+        except KeyError:
+            return channel_id
+        return metadata.name or channel_id
+
     def snapshot_unread(self) -> list[UnreadRecord]:
         """エージェント自身の未読情報スナップショットを取得する。"""
 

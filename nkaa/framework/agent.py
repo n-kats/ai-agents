@@ -1,8 +1,9 @@
 import json
+import multiprocessing
+import threading
 from abc import ABC, abstractmethod
-from multiprocessing import Event, Process
 from pathlib import Path
-from typing import Callable, Generic, Type, TypeVar, cast
+from typing import Any, Callable, Generic, Type, TypeVar, cast, Protocol
 
 from pydantic import BaseModel
 
@@ -123,11 +124,67 @@ TManagerConfig = TypeVar("TManagerConfig", bound=StandardManagerConfig)
 TManagerTools = TypeVar("TManagerTools", bound=BaseTools)
 
 
+class _StopEvent(Protocol):
+    def wait(self, timeout: float | None = None) -> bool:
+        ...
+
+    def set(self) -> None:
+        ...
+
+
+class _WorkerHandle(Protocol):
+    def start(self) -> None:
+        ...
+
+    def join(self, timeout: float | None = None) -> None:
+        ...
+
+    def is_alive(self) -> bool:
+        ...
+
+
+class ManagerExecutionBackend(Protocol):
+    def create_event(self) -> _StopEvent:
+        """停止制御用イベントを生成する。"""
+
+        ...
+
+    def create_worker(self, target: Callable[..., None], args: tuple[Any, ...]) -> _WorkerHandle:
+        """エージェント実行ハンドルを生成する。"""
+
+        ...
+
+
+class MultiprocessingManagerExecutionBackend:
+    """multiprocessing を利用して各エージェントを別プロセスで実行するバックエンド。"""
+
+    def create_event(self) -> _StopEvent:
+        return multiprocessing.Event()
+
+    def create_worker(self, target: Callable[..., None], args: tuple[Any, ...]) -> _WorkerHandle:
+        return multiprocessing.Process(target=target, args=args)
+
+
+class ThreadingManagerExecutionBackend:
+    """threading を利用して各エージェントをスレッドで実行するバックエンド。"""
+
+    def __init__(self, *, daemon: bool = True) -> None:
+        self.daemon = daemon
+
+    def create_event(self) -> _StopEvent:
+        return threading.Event()
+
+    def create_worker(self, target: Callable[..., None], args: tuple[Any, ...]) -> _WorkerHandle:
+        return threading.Thread(target=target, args=args, daemon=self.daemon)
+
+
 class StandardManager(BaseManager, Generic[TManagerConfig, TManagerTools, TTools]):
     def __init__(
         self,
         config: TManagerConfig,
         adapter: Callable[[BaseAgent[TTools], TManagerTools], TTools],
+        *,
+        execution_backend: ManagerExecutionBackend | None = None,
     ) -> None:
         """
         Args:
@@ -140,10 +197,11 @@ class StandardManager(BaseManager, Generic[TManagerConfig, TManagerTools, TTools
             self._load_agent(config_path) for config_path in config.get_agent_config_paths()
         ]
         self.adapter = adapter
+        self.execution_backend = execution_backend or MultiprocessingManagerExecutionBackend()
+        self.stop_event = self.execution_backend.create_event()
 
         self.tools: TManagerTools = self._load_tools()
-        self.agent_processes: list[Process] = []
-        self.stop_event = Event()
+        self.agent_processes: list[_WorkerHandle] = []
 
     def _load_agent(self, config_path: Path) -> BaseAgent[TTools]:
         """
@@ -172,7 +230,13 @@ class StandardManager(BaseManager, Generic[TManagerConfig, TManagerTools, TTools
         標準マネージャーのメインロジックを実行するメソッド。
         """
         assert self.agent_processes == [], "Manager is already running."
-        self.agent_processes = [Process(target=agent.run, args=(self.apply_adapter(agent),)) for agent in self.agents]
+        self.agent_processes = [
+            self.execution_backend.create_worker(
+                target=agent.run,
+                args=(self.apply_adapter(agent),),
+            )
+            for agent in self.agents
+        ]
         for process in self.agent_processes:
             print(f"Starting agent process: {process}")
             process.start()

@@ -6,11 +6,17 @@ import json
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Any, Iterable, Literal, Type
-import threading
 
 from pydantic import BaseModel, Field
 
-from nkaa.framework.agent import AgentConfig, BaseAgent, BaseTools, StandardManager, StandardManagerConfig
+from nkaa.framework.agent import (
+    AgentConfig,
+    BaseAgent,
+    BaseTools,
+    StandardManager,
+    StandardManagerConfig,
+    ThreadingManagerExecutionBackend,
+)
 from nkaa.framework.channels import (
     ChannelManager,
     ChannelSearchQuery,
@@ -19,13 +25,6 @@ from nkaa.framework.channels import (
 )
 from nkaa.framework.channels.models import ChannelMetadata, UnreadRecord
 from nkaa.framework.tools import ChannelTools
-
-# multiprocessing.Event を利用できない環境向けに、StandardManager が参照する
-# Event 実装を threading.Event へ差し替える。
-import nkaa.framework.agent as agent_module
-
-agent_module.Event = threading.Event
-
 
 # ---------------------------------------------------------------------------
 # ツール定義
@@ -243,7 +242,11 @@ class DemoManager(StandardManager[DemoManagerConfig, DemoManagerTools, DemoAgent
     @classmethod
     def initialize_or_load(cls, storage_dir: Path) -> "DemoManager":
         config = DemoManagerConfig(config_dir=storage_dir)
-        return cls(config, demo_adapter)
+        return cls(
+            config,
+            demo_adapter,
+            execution_backend=ThreadingManagerExecutionBackend(),
+        )
 
 
 # ---------------------------------------------------------------------------

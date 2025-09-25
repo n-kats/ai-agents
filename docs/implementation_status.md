@@ -4,6 +4,7 @@
 - [x] Base abstractions (`BaseAgent`, `BaseTools`, `BaseManager`) are defined (`nkaa/framework/agent.py`).
 - [x] `AgentConfig.build` が抽象メソッド化され、サブクラス実装を強制するようになった (`nkaa/framework/agent.py:65`).
 - [x] `StandardManager._load_agent` が設定ファイルを正しく読み込み、対応する `AgentConfig` サブクラスからエージェントを構築するよう修正済み (`nkaa/framework/agent.py:147`).
+- [x] `StandardManager` が `ManagerExecutionBackend` 抽象を通じてプロセス / スレッド実行を切り替え可能になった（デフォルト: `multiprocessing`。`ThreadingManagerExecutionBackend` で環境制約に対応）。
 - [x] エージェント状態の `load/save` のデフォルト実装として `JsonLinesStateMixin` を追加し、プリセットで採用 (`nkaa/framework/persistence.py`, `nkaa/presets/managers/single_agent_model.py`).
 
 - [x] チャンネル周りを専用パッケージへ再編し、`ChannelManager`・`ChannelTools`・キュー・リポジトリの責務を整理 (`nkaa/framework/channels/`, `nkaa/framework/tools.py`).
@@ -22,12 +23,16 @@
 ## Presets
 - [x] シングルエージェント向けプリセットとツール束ねの例が存在 (`nkaa/presets/managers/single_agent_model.py`).
 - [x] `SimpleAgentConfig.build` が自身を渡して `SingleAgent` を構築するよう修正済み (`nkaa/presets/managers/single_agent_model.py:64`).
-- [ ] `LLMCallTool` や `InputTool` がダミー実装のままで、実運用向けツールは未提供 (`nkaa/presets/tools/llm_tool.py`).
+- [x] `LLMCallTool` を gpt-5 系 Responses API 対応の本実装へ置き換え (`nkaa/presets/tools/llm_tool.py`).
+- [ ] `InputTool` がダミー実装のままで、実運用向けツールは未提供。
 
 ## Documentation / Examples
 - [ ] ドキュメントはコンセプト草案のみで、API リファレンスや実装ガイドは未整備 (`docs/concept.md`).
 - [x] サンプル実装ガイドラインを整備し、`docs/samples_guideline.md` に方針を集約。
 - [x] LLM 協調サンプルを `samples/llm_delegation.py` として追加し、複数チャネル活用例を提示。
+  - [x] `StandardManager.run()` パターンへ移行し、スレッド実行・停止シグナル・ストレージ連携を整理。
+  - [x] 人間エージェントをプリセットの `StdIOHumanAgent` へ統合し、サンプルでのツール再利用を一本化。
+  - [x] カスタムツールクラスを廃止し、`StdIOHumanAgentTools` を所有する構成で停止シグナルをエージェントへ伝播。
 - [ ] 実行可能なエンドツーエンド例はまだ整っていない。
 - [x] ライブラリ全体構造を説明するマーメイド図を `docs/library_structure.md` に追加。
 

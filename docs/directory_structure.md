@@ -18,6 +18,7 @@
 - `framework/` : `BaseAgent`, `StandardManager`, チャンネル抽象など基盤クラス。
   - `channels/` : チャンネル本体、マネージャ、優先度キュー、永続化リポジトリの実装。
 - `presets/`
+  - `agents/` : 汎用的なエージェント実装（例: 標準入出力ベースの人間エージェント）。
   - `managers/` : プリセットマネージャ（例: `single_agent_model.py`）。
   - `tools/` : プリセットで利用するツールのダミー実装。
 - `legacy/` : 旧研究用実装 (`legacy/research_agent_v1/`, `legacy/research_agent_v2/`) を格納。設計メモは `docs/legacy/` を参照。

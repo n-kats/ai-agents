@@ -4,9 +4,14 @@ import json
 from pathlib import Path
 from typing import Literal, Type
 
-import pytest
-
-from nkaa.framework.agent import AgentConfig, BaseAgent, BaseTools, StandardManager, StandardManagerConfig
+from nkaa.framework.agent import (
+    AgentConfig,
+    BaseAgent,
+    BaseTools,
+    StandardManager,
+    StandardManagerConfig,
+    ThreadingManagerExecutionBackend,
+)
 
 
 class _DummyTools(BaseTools):
@@ -78,30 +83,18 @@ def _create_agent_config_file(path: Path) -> None:
     path.write_text(json.dumps(payload), encoding="utf-8")
 
 
-class _FakeEvent:
-    def __init__(self) -> None:
-        self._flag = False
-
-    def set(self) -> None:  # pragma: no cover - テストで未使用
-        self._flag = True
-
-    def is_set(self) -> bool:  # pragma: no cover - テストで未使用
-        return self._flag
-
-    def wait(self, timeout: float | None = None) -> bool:  # pragma: no cover - テストで未使用
-        return self._flag
-
-
 def test_standard_manager_save_invokes_tool_and_agent(
-    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+    tmp_path: Path,
 ) -> None:
-    monkeypatch.setattr("nkaa.framework.agent.Event", lambda: _FakeEvent())
-
     config_path = tmp_path / "agent.json"
     _create_agent_config_file(config_path)
 
     config = _DummyManagerConfig(agent_paths=[config_path])
-    manager = _DummyManager(config, _adapter)
+    manager = _DummyManager(
+        config,
+        _adapter,
+        execution_backend=ThreadingManagerExecutionBackend(),
+    )
 
     # load が呼ばれていることを確認
     dummy_agent = manager.agents[0]
