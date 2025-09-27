@@ -5,7 +5,7 @@ from dataclasses import dataclass, field
 from typing import Any, Iterable, Literal, Sequence, TypeVar
 
 from nkaa.framework.agent import BaseTools
-from pydantic import BaseModel
+from pydantic import BaseModel, ConfigDict, Field
 
 try:  # pragma: no cover - openai が未インストールの場合の補助
     from openai import OpenAI
@@ -66,7 +66,7 @@ class LLMCallTool(BaseTools):
         }
         if response_format is not None:
             payload["response_format"] = (
-                response_format.model_dump(exclude_none=True)
+                response_format.model_dump(exclude_none=True, by_alias=True)
                 if isinstance(response_format, BaseModel)
                 else response_format
             )
@@ -258,8 +258,10 @@ class LLMCallTool(BaseTools):
 class JsonSchemaDefinition(BaseModel):
     """Responses API の JSON Schema 定義コンテナ。"""
 
+    model_config = ConfigDict(populate_by_name=True)
+
     name: str
-    schema: dict[str, Any]
+    schema_body: dict[str, Any] = Field(alias="schema")
 
 
 class JsonSchemaResponseFormat(BaseModel):

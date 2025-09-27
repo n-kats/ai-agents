@@ -10,6 +10,7 @@
 
 - [x] チャンネル周りを専用パッケージへ再編し、`ChannelManager`・`ChannelTools`・キュー・リポジトリの責務を整理 (`nkaa/framework/channels/`, `nkaa/framework/tools.py`).
 - [x] PostgreSQL / SQLite 向け `SQLChannelRepository` を追加し、履歴・未読テーブルと `save()` スナップショットの永続化を実装。
+- [x] `ChannelTools.joined_channel_metadata()` を追加し、参加済みチャネルのメタデータを簡便に取得できる API を提供。
 - [ ] エージェントが能動的にチャネル検索・購読できる API 設計（検索条件やアクセス制御など）。
   - [x] `ChannelSearchQuery`・`ChannelManager.search_channels`・`ChannelTools.search`/`join_matching` を追加し、メタデータ条件での検索と自動参加をサポート。
 - [ ] メッセージペイロードのバージョニング/検証ルールと後方互換性戦略の策定。
@@ -43,9 +44,11 @@
   - [x] チャンネル参加はマネージャー側で初期化し、エージェントは `ChannelTools.receive` を通じた受信に専念する構成へ変更。
   - [x] LLM への依頼は `{"output_channel": ..., "message": ...}` の構造化レスポンスを必須とし、自分自身の投稿へ応答しない安全策を追加。
   - [x] サンプル全体を約半分の行数へ整理し、役割切替ロジックと設定を単純化。
+  - [x] チャネル説明のみを用いて出力先を選択できるようエージェント／チャンネルの role 分岐を廃止し、プロンプト制御へ一本化。
+  - [x] Delegation サンプルで `ChannelTools` の標準実装を直接利用するよう整理し、参加済みチャネルだけを扱うロジックを共有化。
 - [ ] 実行可能なエンドツーエンド例はまだ整っていない。
 - [x] ライブラリ全体構造を説明するマーメイド図を `docs/library_structure.md` に追加。
-- [x] `ChannelTools.read` を `receive` と同等の実装へ更新し、`receive` は下位互換ラッパーとして維持。
+- [x] `ChannelTools.read` を `receive` と同等の実装へ更新し、チャネルID引数を廃止して内部で参加チャネルのみを返すよう統一。
 
 ## Legacy Artifacts
 - [x] `legacy/research_agent_v1/` と `legacy/research_agent_v2/` に旧試作を集約し、参照専用としてアーカイブした。

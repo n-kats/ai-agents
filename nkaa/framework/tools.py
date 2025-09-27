@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
-from typing import Any, Iterable, Sequence
+from typing import Any, Sequence
 
 from nkaa.framework.agent import BaseTools
 from nkaa.framework.channels.manager import ChannelManager
@@ -69,6 +69,12 @@ class ChannelTools(BaseTools):
     def joined_channels(self) -> Sequence[str]:
         return tuple(sorted(self.manager.channels_for_agent(self.agent_id)))
 
+    def joined_channel_metadata(self) -> Sequence[ChannelMetadata]:
+        joined = set(self.manager.channels_for_agent(self.agent_id))
+        return tuple(
+            channel.metadata for channel_id, channel in self.manager.list_channels().items() if channel_id in joined
+        )
+
     # ------------------------------------------------------------------
     # Messaging helpers
     # ------------------------------------------------------------------
@@ -89,27 +95,14 @@ class ChannelTools(BaseTools):
         )
         return self.manager.write(channel_id, message)
 
-    def receive(
-        self,
-        *,
-        block: bool = False,
-        timeout: float | None = None,
-        channels: Iterable[str] | None = None,
-    ) -> ChannelMessage | None:
-        return self.read(block=block, timeout=timeout, channels=channels)
-
     def read(
         self,
         *,
         block: bool = False,
-        timeout: float | None = None,
-        channels: Iterable[str] | None = None,
     ) -> ChannelMessage | None:
         return self.manager.read_for_agent(
             self.agent_id,
             block=block,
-            timeout=timeout,
-            allowed_channels=channels,
         )
 
     # ------------------------------------------------------------------

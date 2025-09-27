@@ -4,9 +4,8 @@ from __future__ import annotations
 
 import json
 import logging
-from dataclasses import dataclass
 from pathlib import Path
-from typing import Any, Callable, Iterable, Literal, Type, cast
+from typing import Any, Iterable, Literal, Type, cast
 
 from pydantic import BaseModel, Field
 
@@ -19,6 +18,7 @@ from nkaa.framework.agent import (
     ThreadingManagerExecutionBackend,
 )
 from nkaa.framework.channels import ChannelManager, DatabaseChannelConfig, InMemoryChannelRepository
+from nkaa.framework.channels.models import ChannelMetadata
 from nkaa.framework.tools import ChannelTools
 from nkaa.presets.agents import StdIOHumanAgent, StdIOHumanAgentConfig, StdIOHumanAgentTools
 from nkaa.presets.tools import LLMCallTool
@@ -28,16 +28,32 @@ logger = logging.getLogger(__name__)
 
 ANALYSIS_CHANNEL_NAME = "analysis_workspace"
 HUMAN_CHANNEL_NAME = "human_support"
+ANALYSIS_CHANNEL_DESCRIPTION = "分析担当LLMがアウトラインを元に考察を行うワークスペース。"
+HUMAN_CHANNEL_DESCRIPTION = "人間ユーザーとの対話を行う窓口チャネル。"
 
 FRONT_DESK_SYSTEM_PROMPT = (
-    "あなたは受付エージェントです。依頼を整理し、分析担当が扱えるように短いアウトラインを作成してください。"
-    '必ず {"output_channel": "...", "message": {...}} の JSON だけを返してください。'
+    "あなたは受付エージェントです。"
+    "user メッセージには incoming_channel と incoming_message が含まれています。"
+    "incoming_channel.channel_name が 'human_support' のときは、依頼内容を整理したアウトラインを作り"
+    "analysis_workspace に送るための analysis_request メッセージを構築してください。"
+    "incoming_channel.channel_name が 'analysis_workspace' で incoming_message.role が 'analysis_summary' のときは、"
+    "要約をそのまま human_support へ届けるためのメッセージを作成してください。"
+    "その他のケースでは出力せず無視します。"
+    '必ず {"output_channel": "available_channels の channel_name", "message": {...}} の JSON だけを返してください。'
 )
 
 THINKING_SYSTEM_PROMPT = (
-    "あなたは分析担当です。依頼とアウトラインを読み、サマリー・結論・推奨アクションを返してください。"
-    '必ず {"output_channel": "...", "message": {...}} の JSON だけを返してください。'
+    "あなたは分析担当です。"
+    "incoming_channel.channel_name が 'analysis_workspace' で incoming_message.role が 'analysis_request' のときだけ対応し、"
+    "human_support の依頼内容とアウトラインを読み取って分析サマリー・結論・推奨アクションをまとめてください。"
+    "結果は analysis_workspace に投稿し、role は 'analysis_summary' に設定してください。"
+    "該当しないメッセージは無視します。"
+    '必ず {"output_channel": "available_channels の channel_name", "message": {...}} の JSON だけを返してください。'
 )
+
+
+def _channel_display_name(metadata: ChannelMetadata) -> str:
+    return metadata.name or metadata.id
 
 
 class StructuredChannelResponse(BaseModel):
@@ -49,7 +65,6 @@ class StructuredChannelResponse(BaseModel):
 class DelegationManagerTools(BaseTools):
     channel_manager: ChannelManager
     llm: LLMCallTool
-    stop_manager: Callable[[], None] | None = None
 
     def stop(self) -> None:
         self.llm.stop()
@@ -62,13 +77,17 @@ class DelegationManagerTools(BaseTools):
 class DelegationAgentTools(BaseTools):
     channels: ChannelTools
     llm: LLMCallTool
-    stop_manager: Callable[[], None] | None = None
 
     def stop(self) -> None:
-        self.channels.stop(); self.llm.stop()
+        self.channels.stop()
+        self.llm.stop()
 
     def save(self) -> None:
-        self.channels.save(); self.llm.save()
+        self.channels.save()
+        self.llm.save()
+
+    def joined_channel_metadata(self) -> list[ChannelMetadata]:
+        return list(self.channels.joined_channel_metadata())
 
 
 class DelegationLLMAgent(BaseAgent[DelegationAgentTools]):
@@ -76,18 +95,12 @@ class DelegationLLMAgent(BaseAgent[DelegationAgentTools]):
         self,
         agent_id: str,
         *,
-        role: Literal["front_desk", "thinking"],
+        system_prompt: str,
         model: str,
-        analysis_channel_name: str = ANALYSIS_CHANNEL_NAME,
-        human_channel_name: str | None = None,
     ) -> None:
-        if role == "front_desk" and human_channel_name is None:
-            raise ValueError("Front desk role requires a human channel name.")
         self.agent_id = agent_id
-        self.role = role
         self.model = model
-        self.analysis_channel_name = analysis_channel_name
-        self.human_channel_name = human_channel_name
+        self.system_prompt = system_prompt
 
     def stop(self) -> None:  # pragma: no cover
         return None
@@ -99,133 +112,68 @@ class DelegationLLMAgent(BaseAgent[DelegationAgentTools]):
         return None
 
     def run(self, tools: DelegationAgentTools) -> None:
-        channels = self._channel_map(tools)
-        analysis_id = channels.get(self.analysis_channel_name)
-        if analysis_id is None:
-            raise RuntimeError("Delegation agent requires an analysis channel.")
-        human_id = channels.get(self.human_channel_name) if self.human_channel_name else analysis_id
-        watched = [analysis_id] if human_id == analysis_id else [human_id, analysis_id]
-        available_channels = self._available_channels()
-
         while True:
-            message = tools.channels.receive(channels=watched, block=True, timeout=1.0)
+            message = tools.channels.read(block=True)
             if message is None or message.sender_id == self.agent_id:
                 continue
-            payload = message.payload if isinstance(message.payload, dict) else None
-            if payload is None:
-                continue
-            if self.role == "front_desk":
-                self._handle_front_desk_payload(
-                    tools,
-                    channels,
-                    available_channels,
-                    analysis_id,
-                    human_id,
+            if not isinstance(message.payload, dict):
+                logger.warning(
+                    "Skipping non-dict payload from channel %s: %r",
                     message.channel_id,
-                    payload,
+                    message.payload,
                 )
-            else:
-                self._handle_thinking_payload(
-                    tools,
-                    channels,
-                    available_channels,
-                    analysis_id,
-                    payload,
-                )
-
-    def _handle_front_desk_payload(
-        self,
-        tools: DelegationAgentTools,
-        channels: dict[str, str],
-        available_channels: list[str],
-        analysis_id: str,
-        human_id: str,
-        channel_id: str,
-        payload: dict[str, Any],
-    ) -> None:
-        if channel_id == human_id:
+                continue
+            payload = message.payload
+            channel_metadata = tools.joined_channel_metadata()
+            if not channel_metadata:
+                logger.warning("Agent %s is not joined to any channels", self.agent_id)
+                continue
+            incoming = next((meta for meta in channel_metadata if meta.id == message.channel_id), None)
+            if incoming is None:
+                logger.debug("Skipping message from unexpected channel %s", message.channel_id)
+                continue
+            available_channels = [
+                {
+                    "channel_name": _channel_display_name(meta),
+                    "channel_description": meta.description or "",
+                }
+                for meta in channel_metadata
+            ]
             dispatch = invoke_structured_llm(
                 tools.llm,
                 model=self.model,
-                system_prompt=FRONT_DESK_SYSTEM_PROMPT,
+                system_prompt=self.system_prompt,
                 payload={
-                    "request_id": str(payload.get("request_id", "")) or "request",
-                    "prompt": str(payload.get("prompt", "")),
+                    "incoming_channel": {
+                        "channel_id": incoming.id,
+                        "channel_name": _channel_display_name(incoming),
+                        "channel_description": incoming.description or "",
+                    },
+                    "incoming_message": payload,
                     "available_channels": available_channels,
                 },
+                max_output_tokens=600,
             )
-            target = self._channel_id_for_name(dispatch.output_channel, channels, analysis_id)
-            tools.channels.send(
-                target,
-                with_defaults(
-                    {"role": "analysis_request", **dispatch.message},
-                    request_id=payload.get("request_id", "request"),
-                    original_prompt=payload.get("prompt", ""),
-                    outline=payload.get("prompt", "依頼を整理してください。"),
-                ),
-            )
-            return
-
-        if payload.get("role") != "analysis_summary":
-            return
-        tools.channels.send(human_id, payload)
-        if callable(tools.stop_manager):
-            tools.stop_manager()
-
-    def _handle_thinking_payload(
-        self,
-        tools: DelegationAgentTools,
-        channels: dict[str, str],
-        available_channels: list[str],
-        analysis_id: str,
-        payload: dict[str, Any],
-    ) -> None:
-        if payload.get("role") != "analysis_request":
-            return
-        outline = str(payload.get("outline", ""))
-        prompt = str(payload.get("original_prompt", outline))
-        request_id = str(payload.get("request_id", "")) or "request"
-        dispatch = invoke_structured_llm(
-            tools.llm,
-            model=self.model,
-            system_prompt=THINKING_SYSTEM_PROMPT,
-            payload={
-                "request_id": request_id,
-                "human_request": prompt,
-                "front_desk_outline": outline,
-                "available_channels": available_channels,
-            },
-            max_output_tokens=600,
-        )
-        target = self._channel_id_for_name(dispatch.output_channel, channels, analysis_id)
-        tools.channels.send(
-            target,
-            with_defaults(
-                {"role": "analysis_summary", **dispatch.message},
-                request_id=request_id,
-                summary=outline or prompt,
-                conclusion="追加の検討が必要です。",
-                action_items=[],
-                risks=[],
-                assumptions=[],
-            ),
-        )
-
-    def _available_channels(self) -> list[str]:
-        names = [self.analysis_channel_name]
-        if self.human_channel_name:
-            names.append(self.human_channel_name)
-        return sorted({name for name in names if name})
-
-    def _channel_map(self, tools: DelegationAgentTools) -> dict[str, str]:
-        mapping: dict[str, str] = {}
-        for channel_id in tools.channels.joined_channels():
-            mapping[tools.channels.get_channel_name(channel_id)] = channel_id
-        return mapping
-
-    def _channel_id_for_name(self, name: str, mapping: dict[str, str], default: str) -> str:
-        trimmed = name.strip()
-        return mapping.get(trimmed, default)
+            target: str | None = None
+            trimmed = dispatch.output_channel.strip()
+            if trimmed:
+                for meta in channel_metadata:
+                    if _channel_display_name(meta) == trimmed:
+                        target = meta.id
+                        break
+                else:
+                    logger.warning(
+                        "Unknown output channel '%s' from agent %s; falling back",
+                        dispatch.output_channel,
+                        self.agent_id,
+                    )
+            if target is None:
+                logger.warning(
+                    "No output channel resolved; returning to source %s",
+                    message.channel_id,
+                )
+                target = message.channel_id
+            tools.channels.send(target, dispatch.message)
 
 
 def invoke_structured_llm(
@@ -240,7 +188,9 @@ def invoke_structured_llm(
         {"role": "system", "content": system_prompt},
         {"role": "user", "content": json.dumps(payload, ensure_ascii=False)},
     ]
-    logger.info("LLM call role=%s request=%s", payload.get("role", "n/a"), payload.get("request_id"))
+    incoming = payload.get("incoming_channel", {})
+    channel_name = incoming.get("channel_name") if isinstance(incoming, dict) else "n/a"
+    logger.info("LLM call channel=%s model=%s", channel_name, model)
     return llm.call_parsed(
         messages,
         parse_model=StructuredChannelResponse,
@@ -249,30 +199,23 @@ def invoke_structured_llm(
     )
 
 
-def with_defaults(data: dict[str, Any], **defaults: Any) -> dict[str, Any]:
-    for key, default in defaults.items():
-        data.setdefault(key, default)
-    return data
-
-
 def delegation_adapter(agent: BaseAgent[Any], manager_tools: DelegationManagerTools) -> BaseTools:
-    channel_tools = ChannelTools(agent_id=agent.agent_id, manager=manager_tools.channel_manager)
+    base_channel_tools = ChannelTools(agent_id=agent.agent_id, manager=manager_tools.channel_manager)
     if isinstance(agent, DelegationLLMAgent):
-        return DelegationAgentTools(channels=channel_tools, llm=manager_tools.llm, stop_manager=manager_tools.stop_manager)
-    return StdIOHumanAgentTools(channels=channel_tools)
+        return DelegationAgentTools(channels=base_channel_tools, llm=manager_tools.llm)
+    return StdIOHumanAgentTools(channels=base_channel_tools)
 
 
 class DelegationLLMAgentConfig(AgentConfig):
     type: Literal["delegation_llm"] = "delegation_llm"
-    role: Literal["front_desk", "thinking"]
+    system_prompt: str
     model: str = Field("gpt-5-mini")
 
     def build(self) -> DelegationLLMAgent:
         return DelegationLLMAgent(
             agent_id=self.id,
-            role=self.role,
             model=self.model,
-            human_channel_name=HUMAN_CHANNEL_NAME if self.role == "front_desk" else None,
+            system_prompt=self.system_prompt,
         )
 
 
@@ -304,18 +247,38 @@ def configure_delegation_channels(manager: StandardManager) -> None:
     tools = cast(DelegationManagerTools, manager.tools)
     channel_manager = tools.channel_manager
 
-    front_desk = next((agent for agent in manager.agents if isinstance(agent, DelegationLLMAgent) and agent.role == "front_desk"), None)
-    thinker = next((agent for agent in manager.agents if isinstance(agent, DelegationLLMAgent) and agent.role == "thinking"), None)
+    front_desk = next(
+        (
+            agent
+            for agent in manager.agents
+            if isinstance(agent, DelegationLLMAgent) and agent.agent_id == "front_desk_agent"
+        ),
+        None,
+    )
+    thinker = next(
+        (
+            agent
+            for agent in manager.agents
+            if isinstance(agent, DelegationLLMAgent) and agent.agent_id == "thinking_agent"
+        ),
+        None,
+    )
     human = next((agent for agent in manager.agents if isinstance(agent, StdIOHumanAgent)), None)
 
     if front_desk is None or thinker is None or human is None:
         raise RuntimeError("llm_delegation sample expects front desk, thinking, and human agents.")
 
     human_channel_id = channel_manager.create(
-        DatabaseChannelConfig(name=front_desk.human_channel_name or "human_support")
+        DatabaseChannelConfig(
+            name=HUMAN_CHANNEL_NAME,
+            description=HUMAN_CHANNEL_DESCRIPTION,
+        )
     ).id
     analysis_channel_id = channel_manager.create(
-        DatabaseChannelConfig(name=front_desk.analysis_channel_name)
+        DatabaseChannelConfig(
+            name=ANALYSIS_CHANNEL_NAME,
+            description=ANALYSIS_CHANNEL_DESCRIPTION,
+        )
     ).id
 
     channel_manager.join_agent(human_channel_id, front_desk.agent_id)
@@ -349,8 +312,8 @@ def prepare_configs(base_dir: Path) -> None:
             {
                 "type": "delegation_llm",
                 "id": "front_desk_agent",
-                "role": "front_desk",
                 "model": "gpt-5-nano",
+                "system_prompt": FRONT_DESK_SYSTEM_PROMPT,
             },
         ),
         (
@@ -358,8 +321,8 @@ def prepare_configs(base_dir: Path) -> None:
             {
                 "type": "delegation_llm",
                 "id": "thinking_agent",
-                "role": "thinking",
                 "model": "gpt-5-mini",
+                "system_prompt": THINKING_SYSTEM_PROMPT,
             },
         ),
     ]
@@ -377,8 +340,6 @@ def run_demo() -> None:
         adapter=delegation_adapter,
         execution_backend=ThreadingManagerExecutionBackend(),
     )
-    tools = cast(DelegationManagerTools, manager.tools)
-    tools.stop_manager = manager.create_stop_event_tool()
     configure_delegation_channels(manager)
     manager.run()
 
