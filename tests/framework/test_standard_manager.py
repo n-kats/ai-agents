@@ -2,12 +2,13 @@ from __future__ import annotations
 
 import json
 from pathlib import Path
-from typing import Literal, Type
+from typing import Callable, Literal, Type
 
 from nkaa.framework.agent import (
     AgentConfig,
     BaseAgent,
     BaseTools,
+    ManagerExecutionBackend,
     StandardManager,
     StandardManagerConfig,
     ThreadingManagerExecutionBackend,
@@ -64,14 +65,29 @@ class _DummyManagerConfig(StandardManagerConfig):
             raise ValueError(type_name)
         return _DummyAgentConfig
 
+    def build_tools(self) -> _DummyTools:
+        return _DummyTools()
+
 
 def _adapter(agent: BaseAgent[_DummyTools], tools: _DummyTools) -> _DummyTools:
     return tools
 
 
 class _DummyManager(StandardManager[_DummyManagerConfig, _DummyTools, _DummyTools]):
-    def _load_tools(self) -> _DummyTools:
-        return _DummyTools()
+    def __init__(
+        self,
+        config: _DummyManagerConfig,
+        adapter: Callable[[BaseAgent[_DummyTools], _DummyTools], _DummyTools],
+        *,
+        tools: _DummyTools,
+        execution_backend: ThreadingManagerExecutionBackend | None = None,
+    ) -> None:
+        super().__init__(
+            config,
+            adapter,
+            tools=tools,
+            execution_backend=execution_backend,
+        )
 
     @classmethod
     def initialize_or_load(cls, storage_dir: Path) -> "_DummyManager":  # pragma: no cover - テスト対象外
@@ -93,6 +109,7 @@ def test_standard_manager_save_invokes_tool_and_agent(
     manager = _DummyManager(
         config,
         _adapter,
+        tools=config.build_tools(),
         execution_backend=ThreadingManagerExecutionBackend(),
     )
 

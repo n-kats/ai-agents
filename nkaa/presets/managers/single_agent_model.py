@@ -5,7 +5,14 @@ from typing import Callable, Literal, Type
 
 from pydantic import BaseModel
 
-from nkaa.framework.agent import AgentConfig, BaseAgent, BaseTools, StandardManager, StandardManagerConfig
+from nkaa.framework.agent import (
+    AgentConfig,
+    BaseAgent,
+    BaseTools,
+    ManagerExecutionBackend,
+    StandardManager,
+    StandardManagerConfig,
+)
 from nkaa.framework.persistence import JsonLinesStateMixin
 from nkaa.presets.tools.llm_tool import LLMCallTool
 
@@ -43,7 +50,7 @@ class SingleAgentTools(BaseTools):
     llm_call_tool: LLMCallTool
     log_tool: LogTool
     input_tool: InputTool
-    stop_tool: Callable[[], None]
+    stop_tool: Callable[[], None] | None = None
 
     def stop(self) -> None:
         """
@@ -116,7 +123,8 @@ class SingleAgent(JsonLinesStateMixin[SingleAgentMemory], BaseAgent[SingleAgentT
             self.memories.append(SingleAgentMemory(content=response))
             if self.config.max_steps is not None and len(self.memories) >= self.config.max_steps:
                 break
-        tools.stop_tool()
+        if tools.stop_tool is not None:
+            tools.stop_tool()
 
     def stop(self) -> None:
         self.stop_event.set()
@@ -153,20 +161,41 @@ class SingleAgentModelConfig(StandardManagerConfig):
             raise ValueError(f"Unknown agent type: {type_name}")
         return type_
 
-
-class SingleAgentModel(StandardManager[SingleAgentModelConfig, SingleAgentTools, SingleAgentTools]):
-    def _load_tools(self) -> SingleAgentTools:
+    def build_tools(self) -> SingleAgentTools:
         return SingleAgentTools(
             llm_call_tool=LLMCallTool(),
             log_tool=LogTool(),
             input_tool=InputTool(),
-            stop_tool=self.create_stop_event_tool(),
         )
+
+
+class SingleAgentModel(StandardManager[SingleAgentModelConfig, SingleAgentTools, SingleAgentTools]):
+    def __init__(
+        self,
+        config: SingleAgentModelConfig,
+        adapter: Callable[[BaseAgent[SingleAgentTools], SingleAgentTools], SingleAgentTools],
+        *,
+        tools: SingleAgentTools,
+        execution_backend: ManagerExecutionBackend | None = None,
+    ) -> None:
+        super().__init__(
+            config,
+            adapter,
+            tools=tools,
+            execution_backend=execution_backend,
+        )
+        if self.tools.stop_tool is None:
+            self.tools.stop_tool = self.create_stop_event_tool()
 
     @classmethod
     def initialize_or_load(cls, storage_dir: Path) -> "SingleAgentModel":
         config = SingleAgentModelConfig(data_root_dir=storage_dir)
-        return cls(config, single_agent_model_adapter)
+        tools = config.build_tools()
+        return cls(
+            config,
+            single_agent_model_adapter,
+            tools=tools,
+        )
 
 
 def single_agent_model_adapter(agent: BaseAgent[SingleAgentTools], tools: SingleAgentTools) -> SingleAgentTools:

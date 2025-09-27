@@ -2,9 +2,10 @@ from __future__ import annotations
 
 import os
 from dataclasses import dataclass, field
-from typing import Any, Iterable, Sequence
+from typing import Any, Iterable, Literal, Sequence, TypeVar
 
 from nkaa.framework.agent import BaseTools
+from pydantic import BaseModel
 
 try:  # pragma: no cover - openai が未インストールの場合の補助
     from openai import OpenAI
@@ -13,6 +14,9 @@ except ImportError as exc:  # pragma: no cover - 実行環境に依存
     _OPENAI_IMPORT_ERROR = exc
 else:
     _OPENAI_IMPORT_ERROR = None
+
+
+ParsedModelT = TypeVar("ParsedModelT", bound=BaseModel)
 
 
 @dataclass
@@ -41,7 +45,8 @@ class LLMCallTool(BaseTools):
         messages: Sequence[dict[str, Any]] | Iterable[dict[str, Any]],
         *,
         model_name: str | None = None,
-        response_format: dict[str, Any] | None = None,
+        response_format: ResponseFormatModel | dict[str, Any] | None = None,
+        text_format: type[BaseModel] | None = None,
         max_output_tokens: int | None = None,
         **params: Any,
     ) -> Any:
@@ -50,16 +55,29 @@ class LLMCallTool(BaseTools):
         client = self._ensure_client()
         model = self._normalize_model(model_name)
 
+        if response_format is not None and text_format is not None:
+            raise ValueError(
+                "response_format と text_format は同時に指定できません。"
+            )
+
         payload: dict[str, Any] = {
             "model": model,
             "input": list(messages),
         }
         if response_format is not None:
-            payload["response_format"] = response_format
+            payload["response_format"] = (
+                response_format.model_dump(exclude_none=True)
+                if isinstance(response_format, BaseModel)
+                else response_format
+            )
+        if text_format is not None:
+            payload["text_format"] = text_format
         if max_output_tokens is not None:
             payload["max_output_tokens"] = max_output_tokens
         if params:
             payload.update(params)
+        if text_format is not None:
+            return client.responses.parse(**payload)
         return client.responses.create(**payload)
 
     def call_text(
@@ -67,7 +85,7 @@ class LLMCallTool(BaseTools):
         messages: Sequence[dict[str, Any]] | Iterable[dict[str, Any]],
         *,
         model_name: str | None = None,
-        response_format: dict[str, Any] | None = None,
+        response_format: ResponseFormatModel | dict[str, Any] | None = None,
         max_output_tokens: int | None = None,
         **params: Any,
     ) -> str:
@@ -90,7 +108,7 @@ class LLMCallTool(BaseTools):
         messages: Sequence[dict[str, Any]] | Iterable[dict[str, Any]],
         *,
         model_name: str | None = None,
-        response_format: dict[str, Any],
+        response_format: ResponseFormatModel | dict[str, Any],
         max_output_tokens: int | None = None,
         **params: Any,
     ) -> Any:
@@ -106,6 +124,31 @@ class LLMCallTool(BaseTools):
         import json
 
         return json.loads(text)
+
+    def call_parsed(
+        self,
+        messages: Sequence[dict[str, Any]] | Iterable[dict[str, Any]],
+        *,
+        parse_model: type[ParsedModelT],
+        model_name: str | None = None,
+        max_output_tokens: int | None = None,
+        **params: Any,
+    ) -> ParsedModelT:
+        """Responses API の構造化出力を Pydantic モデルとして取得する。"""
+
+        response = self.create_response(
+            messages,
+            model_name=model_name,
+            text_format=parse_model,
+            max_output_tokens=max_output_tokens,
+            **params,
+        )
+        parsed = getattr(response, "output_parsed", None)
+        if parsed is None:
+            raise RuntimeError("Responses API から構造化出力が得られませんでした。")
+        if isinstance(parsed, parse_model):
+            return parsed
+        return parse_model.model_validate(parsed)
 
     # ------------------------------------------------------------------
     # Helpers
@@ -211,3 +254,25 @@ class LLMCallTool(BaseTools):
             raise ValueError("LLMCallTool は gpt-5 系モデルのみをサポートします。")
         return model
 
+
+class JsonSchemaDefinition(BaseModel):
+    """Responses API の JSON Schema 定義コンテナ。"""
+
+    name: str
+    schema: dict[str, Any]
+
+
+class JsonSchemaResponseFormat(BaseModel):
+    """Responses API の JSON Schema フォーマット指定。"""
+
+    type: Literal["json_schema"] = "json_schema"
+    json_schema: JsonSchemaDefinition
+
+
+class TextResponseFormat(BaseModel):
+    """Responses API の text フォーマット指定。"""
+
+    type: Literal["text"] = "text"
+
+
+ResponseFormatModel = JsonSchemaResponseFormat | TextResponseFormat

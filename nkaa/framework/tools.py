@@ -89,6 +89,15 @@ class ChannelTools(BaseTools):
         )
         return self.manager.write(channel_id, message)
 
+    def receive(
+        self,
+        *,
+        block: bool = False,
+        timeout: float | None = None,
+        channels: Iterable[str] | None = None,
+    ) -> ChannelMessage | None:
+        return self.read(block=block, timeout=timeout, channels=channels)
+
     def read(
         self,
         *,

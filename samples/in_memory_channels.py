@@ -3,9 +3,11 @@
 from __future__ import annotations
 
 import json
+import time
+from collections.abc import Callable
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Any, Iterable, Literal, Type
+from typing import Any, Iterable, Literal, Type, cast
 
 from pydantic import BaseModel, Field
 
@@ -34,6 +36,7 @@ from nkaa.framework.tools import ChannelTools
 @dataclass
 class DemoManagerTools(BaseTools):
     channel_manager: ChannelManager
+    stop_manager: Callable[[], None] | None = None
 
     def stop(self) -> None:
         return None
@@ -45,6 +48,7 @@ class DemoManagerTools(BaseTools):
 @dataclass
 class DemoAgentTools(BaseTools):
     channels: ChannelTools
+    stop_manager: Callable[[], None] | None = None
 
     def stop(self) -> None:
         return None
@@ -55,7 +59,7 @@ class DemoAgentTools(BaseTools):
 
 def demo_adapter(agent: BaseAgent[DemoAgentTools], manager_tools: DemoManagerTools) -> DemoAgentTools:
     channel_tools = ChannelTools(agent_id=agent.agent_id, manager=manager_tools.channel_manager)
-    return DemoAgentTools(channels=channel_tools)
+    return DemoAgentTools(channels=channel_tools, stop_manager=manager_tools.stop_manager)
 
 
 # ---------------------------------------------------------------------------
@@ -111,7 +115,10 @@ class AlertPublisher(BaseDemoAgent):
         tools.channels.join(self.channel_id)
         for payload in self.payloads:
             stored = tools.channels.send(self.channel_id, payload)
-            print(f"[Publisher:{self.agent_id}] sent #{stored.message_id}: {stored.payload}")
+            print(
+                f"[Publisher:{self.agent_id}] sent #{stored.message_id}: {stored.payload}",
+                flush=True,
+            )
 
     def _ensure_channel(self, tools: DemoAgentTools) -> str:
         descriptor = self.channel_descriptor
@@ -128,39 +135,67 @@ class AlertPublisher(BaseDemoAgent):
     def _print_channel_created(self, metadata: ChannelMetadata) -> None:
         print(
             f"[Publisher:{self.agent_id}] created channel {metadata.id}"
-            f" (name={metadata.name}, attributes={metadata.attributes})"
+            f" (name={metadata.name}, attributes={metadata.attributes})",
+            flush=True,
         )
 
 
 class AlertSubscriber(BaseDemoAgent):
     """メタデータ検索でチャネルに参加し、未読を処理するエージェント。"""
 
-    def __init__(self, agent_id: str, query: ChannelSearchQuery) -> None:
+    def __init__(
+        self,
+        agent_id: str,
+        query: ChannelSearchQuery,
+        *,
+        read_timeout: float = 0.2,
+        max_idle_cycles: int = 5,
+    ) -> None:
         super().__init__(agent_id)
         self.query = query
         self.joined = False
+        self.read_timeout = read_timeout
+        self.max_idle_cycles = max_idle_cycles
 
     def run(self, tools: DemoAgentTools) -> None:
         if not self.joined:
             joined = tools.channels.join_matching(self.query)
-            print(f"[Subscriber] joined channels: {joined}")
-            self.joined = True
+            if joined:
+                print(f"[Subscriber] joined channels: {joined}", flush=True)
+                self.joined = True
 
-        while True:
-            message = tools.channels.read()
+        idle_cycles = 0
+        while idle_cycles < self.max_idle_cycles:
+            message = tools.channels.read(block=True, timeout=self.read_timeout)
             if message is None:
-                break
-            print(f"[Subscriber] received #{message.message_id}: {message.payload}")
+                idle_cycles += 1
+                newly_joined = tools.channels.join_matching(self.query)
+                if newly_joined:
+                    print(f"[Subscriber] joined channels: {newly_joined}", flush=True)
+                    self.joined = True
+                continue
+
+            idle_cycles = 0
+            print(f"[Subscriber] received #{message.message_id}: {message.payload}", flush=True)
 
 
 class SnapshotObserver(BaseDemoAgent):
     """未読スナップショットと復元を確認するエージェント。"""
 
-    def __init__(self, agent_id: str, target_agent_id: str) -> None:
+    def __init__(
+        self,
+        agent_id: str,
+        target_agent_id: str,
+        *,
+        wait_before_snapshot: float = 0.3,
+    ) -> None:
         super().__init__(agent_id)
         self.target_agent_id = target_agent_id
+        self.wait_before_snapshot = wait_before_snapshot
 
     def run(self, tools: DemoAgentTools) -> None:
+        if self.wait_before_snapshot > 0:
+            time.sleep(self.wait_before_snapshot)
         manager = tools.channels.manager
         records = manager.snapshot_unread_records(self.target_agent_id)
         self._print_records(records)
@@ -169,10 +204,13 @@ class SnapshotObserver(BaseDemoAgent):
 
         restored_manager = ChannelManager(manager.repository)
         restored_message = restored_manager.read_for_agent(self.target_agent_id)
-        print(f"[Observer] restored message: {restored_message}")
+        print(f"[Observer] restored message: {restored_message}", flush=True)
+
+        if callable(tools.stop_manager):
+            tools.stop_manager()
 
     def _print_records(self, records: list[UnreadRecord]) -> None:
-        print(f"[Observer] unread snapshot count: {len(records)}")
+        print(f"[Observer] unread snapshot count: {len(records)}", flush=True)
         for record in records:
             print(
                 "  ->",
@@ -180,6 +218,7 @@ class SnapshotObserver(BaseDemoAgent):
                 record.channel_id,
                 record.message_id,
                 record.priority,
+                flush=True,
             )
 
 
@@ -200,17 +239,29 @@ class PublisherAgentConfig(AgentConfig):
 class SubscriberAgentConfig(AgentConfig):
     type: Literal["alert_subscriber"] = "alert_subscriber"
     query: ChannelSearchQuery
+    read_timeout: float = 0.2
+    max_idle_cycles: int = 5
 
     def build(self) -> AlertSubscriber:
-        return AlertSubscriber(agent_id=self.id, query=self.query)
+        return AlertSubscriber(
+            agent_id=self.id,
+            query=self.query,
+            read_timeout=self.read_timeout,
+            max_idle_cycles=self.max_idle_cycles,
+        )
 
 
 class ObserverAgentConfig(AgentConfig):
     type: Literal["snapshot_observer"] = "snapshot_observer"
     target_agent_id: str
+    wait_before_snapshot: float = 0.3
 
     def build(self) -> SnapshotObserver:
-        return SnapshotObserver(agent_id=self.id, target_agent_id=self.target_agent_id)
+        return SnapshotObserver(
+            agent_id=self.id,
+            target_agent_id=self.target_agent_id,
+            wait_before_snapshot=self.wait_before_snapshot,
+        )
 
 
 AGENT_TYPE_REGISTRY: dict[str, Type[AgentConfig]] = {
@@ -232,20 +283,9 @@ class DemoManagerConfig(StandardManagerConfig):
         except KeyError as exc:
             raise ValueError(f"Unknown agent type: {type_name}") from exc
 
-
-class DemoManager(StandardManager[DemoManagerConfig, DemoManagerTools, DemoAgentTools]):
-    def _load_tools(self) -> DemoManagerTools:
-        repository = InMemoryChannelRepository()
-        manager = ChannelManager(repository)
-        return DemoManagerTools(channel_manager=manager)
-
-    @classmethod
-    def initialize_or_load(cls, storage_dir: Path) -> "DemoManager":
-        config = DemoManagerConfig(config_dir=storage_dir)
-        return cls(
-            config,
-            demo_adapter,
-            execution_backend=ThreadingManagerExecutionBackend(),
+    def build_tools(self) -> DemoManagerTools:
+        return DemoManagerTools(
+            channel_manager=ChannelManager(InMemoryChannelRepository())
         )
 
 
@@ -319,6 +359,7 @@ def prepare_configs(base_dir: Path) -> None:
                 "type": "snapshot_observer",
                 "id": "observer",
                 "target_agent_id": "subscriber",
+                "wait_before_snapshot": 0.5,
             },
         ),
     ]
@@ -331,21 +372,17 @@ def run_demo() -> None:
     config_dir = Path("_tmp/samples/standard_manager")
     prepare_configs(config_dir)
 
-    manager = DemoManager.initialize_or_load(config_dir)
+    manager = StandardManager.initialize_or_load(
+        config_dir,
+        config_factory=lambda storage_dir: DemoManagerConfig(config_dir=storage_dir),
+        adapter=demo_adapter,
+        execution_backend=ThreadingManagerExecutionBackend(),
+    )
 
-    agents = {getattr(agent, "agent_id", f"agent_{idx}"): agent for idx, agent in enumerate(manager.agents)}
+    tools = cast(DemoManagerTools, manager.tools)
+    tools.stop_manager = manager.create_stop_event_tool()
 
-    def run_agent(agent_id: str) -> None:
-        agent = agents[agent_id]
-        tools = manager.apply_adapter(agent)
-        agent.run(tools)
-
-    run_agent("publisher_bootstrap")
-    run_agent("subscriber")
-    run_agent("publisher_main")
-    run_agent("subscriber")
-    run_agent("publisher_followup")
-    run_agent("observer")
+    manager.run()
 
 
 if __name__ == "__main__":

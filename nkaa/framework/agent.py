@@ -119,6 +119,10 @@ class StandardManagerConfig(ABC, BaseModel):
             Type[AgentConfig]: 指定されたタイプ名に対応する設定モデルのクラス。
         """
 
+    @abstractmethod
+    def build_tools(self) -> BaseTools:
+        """この設定に紐づくツールセットを構築する。"""
+
 
 TManagerConfig = TypeVar("TManagerConfig", bound=StandardManagerConfig)
 TManagerTools = TypeVar("TManagerTools", bound=BaseTools)
@@ -184,6 +188,7 @@ class StandardManager(BaseManager, Generic[TManagerConfig, TManagerTools, TTools
         config: TManagerConfig,
         adapter: Callable[[BaseAgent[TTools], TManagerTools], TTools],
         *,
+        tools: TManagerTools,
         execution_backend: ManagerExecutionBackend | None = None,
     ) -> None:
         """
@@ -200,7 +205,7 @@ class StandardManager(BaseManager, Generic[TManagerConfig, TManagerTools, TTools
         self.execution_backend = execution_backend or MultiprocessingManagerExecutionBackend()
         self.stop_event = self.execution_backend.create_event()
 
-        self.tools: TManagerTools = self._load_tools()
+        self.tools = tools
         self.agent_processes: list[_WorkerHandle] = []
 
     def _load_agent(self, config_path: Path) -> BaseAgent[TTools]:
@@ -256,16 +261,6 @@ class StandardManager(BaseManager, Generic[TManagerConfig, TManagerTools, TTools
         for agent in self.agents:
             agent.save()
 
-    @abstractmethod
-    def _load_tools(self) -> TManagerTools:
-        """
-        マネージャーが使用するツールをロードするメソッド。
-        設定はconfigから取得され、ツールのインスタンスが返されます。
-        Returns:
-            TManagerTools: ロードされたツールのインスタンス。
-        """
-        pass
-
     def create_stop_event_tool(self) -> Callable[[], None]:
         """
         エージェントの実行を停止するためのイベントツールを作成するメソッド。
@@ -273,3 +268,32 @@ class StandardManager(BaseManager, Generic[TManagerConfig, TManagerTools, TTools
             Event: エージェントの実行を停止するためのイベント。
         """
         return self.stop_event.set
+
+    @classmethod
+    def initialize_or_load(
+        cls,
+        storage_dir: Path,
+        *,
+        config_factory: Callable[[Path], TManagerConfig] | None = None,
+        adapter: Callable[[BaseAgent[TTools], TManagerTools], TTools] | None = None,
+        tools_factory: Callable[[TManagerConfig], TManagerTools] | None = None,
+        execution_backend: ManagerExecutionBackend | None = None,
+    ) -> "StandardManager[TManagerConfig, TManagerTools, TTools]":
+        if config_factory is None:
+            raise ValueError("config_factory must be provided")
+        if adapter is None:
+            raise ValueError("adapter must be provided")
+
+        config = config_factory(storage_dir)
+        tools = (
+            tools_factory(config)
+            if tools_factory is not None
+            else cast(TManagerTools, config.build_tools())
+        )
+
+        return cls(
+            config,
+            adapter,
+            tools=tools,
+            execution_backend=execution_backend,
+        )
