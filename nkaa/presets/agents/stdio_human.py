@@ -1,6 +1,8 @@
 from __future__ import annotations
 
 import json
+import shlex
+import time
 from collections import defaultdict
 from dataclasses import dataclass
 from pathlib import Path
@@ -87,17 +89,44 @@ class StdIOHumanAgent(BaseAgent[StdIOHumanAgentTools]):
         self._history: StdIOHumanHistory | None = (
             StdIOHumanHistory(history_path) if history_path is not None else None
         )
+        self._stop_requested = False
+        self._current_send_channels: list[str] = []
 
     def run(self, tools: StdIOHumanAgentTools) -> None:
+        self._print_usage()
         channel_tools = tools.channels
 
         handled_message = self._process_incoming_messages(channel_tools)
 
+        self._initialize_send_targets(channel_tools)
+        self._print_current_targets(channel_tools)
+
         if not handled_message:
-            print("[StdIOHumanAgent] 未処理のメッセージはありません。", flush=True)
+            print("[StdIOHumanAgent] 受信待ちです。必要に応じてメッセージやコマンドを入力してください。", flush=True)
+
+        while not self._stop_requested:
+            message = channel_tools.read()
+            if message is None:
+                handled = self._handle_main_prompt(channel_tools)
+                if not handled:
+                    time.sleep(0.2)
+                continue
+
+            self._append_history(
+                StdIOHumanHistoryRecord(
+                    channel_id=message.channel_id,
+                    direction="incoming",
+                    payload=message.payload,
+                    request_id=self._extract_request_id(message),
+                )
+            )
+            channel_name = channel_tools.get_channel_name(message.channel_id)
+            self._display_message(message, channel_name)
+            self._handle_reply(channel_tools, message)
+            self._print_current_targets(channel_tools)
 
     def stop(self) -> None:
-        return None
+        self._stop_requested = True
 
     def load(self) -> None:
         if self._history is not None:
@@ -155,6 +184,8 @@ class StdIOHumanAgent(BaseAgent[StdIOHumanAgentTools]):
             message = tools.read()
             if message is None:
                 break
+            if self._stop_requested:
+                break
 
             handled = True
             channel_name = tools.get_channel_name(message.channel_id)
@@ -192,6 +223,150 @@ class StdIOHumanAgent(BaseAgent[StdIOHumanAgentTools]):
             return input(prompt)
         except EOFError:
             return ""
+
+    def _print_usage(self) -> None:
+        print(
+            "[StdIOHumanAgent] 利用方法: 受信メッセージを確認後、表示されるプロンプトに返信内容を入力してください。",
+            flush=True,
+        )
+        print(
+            "[StdIOHumanAgent] コマンド: '/channels' で参加チャネル一覧を表示できます。",
+            flush=True,
+        )
+        print(
+            "[StdIOHumanAgent] '/channel <name ...>' で送信先を変更できます。",
+            flush=True,
+        )
+        print(
+            "[StdIOHumanAgent] '/skip' は送信や返信をスキップし、'/help' でこの案内を再表示します。",
+            flush=True,
+        )
+
+    def _initialize_send_targets(self, tools: ChannelTools) -> None:
+        # 初期状態では参加済みチャネルすべてを送信対象とする。
+        self._current_send_channels = []
+
+    def _print_current_targets(self, tools: ChannelTools) -> None:
+        print(
+            f"[StdIOHumanAgent] 現在の送信先: {self._format_targets(tools)}",
+            flush=True,
+        )
+
+    def _format_targets(self, tools: ChannelTools) -> str:
+        metadata = {meta.id: meta for meta in tools.joined_channel_metadata()}
+        targets = self._effective_targets(metadata)
+        if not targets:
+            return "なし"
+        names = []
+        for channel_id in targets:
+            meta = metadata.get(channel_id)
+            name = meta.name or meta.id if meta is not None else channel_id
+            names.append(name)
+        return ", ".join(names)
+
+    def _handle_main_prompt(self, tools: ChannelTools) -> bool:
+        prompt = "[StdIOHumanAgent] メッセージまたはコマンド（送信先: %s）: " % self._format_targets(tools)
+        text = self._safe_input(prompt)
+        if not text:
+            return False
+        content = text.strip()
+        if not content:
+            return False
+        if content.startswith("/"):
+            self._handle_command(content, tools)
+            return True
+        self._send_to_targets(tools, content)
+        return True
+
+    def _handle_command(self, command: str, tools: ChannelTools) -> None:
+        if command == "/skip":
+            print("[StdIOHumanAgent] 入力をスキップしました。", flush=True)
+            return
+        if command == "/channels":
+            self._list_channels(tools)
+            return
+        if command.startswith("/channel"):
+            args = command[len("/channel") :].strip()
+            self._set_send_targets(args, tools)
+            return
+        if command == "/help":
+            self._print_usage()
+            self._print_current_targets(tools)
+            return
+        print(f"[StdIOHumanAgent] 未対応のコマンドです: {command}", flush=True)
+
+    def _list_channels(self, tools: ChannelTools) -> None:
+        metadata = tools.joined_channel_metadata()
+        if not metadata:
+            print("[StdIOHumanAgent] 参加チャネルがありません。", flush=True)
+            return
+        current = set(self._effective_targets({meta.id: meta for meta in metadata}))
+        print("[StdIOHumanAgent] 参加チャネル一覧 (*は送信対象):", flush=True)
+        for meta in metadata:
+            name = meta.name or meta.id
+            description = meta.description or ""
+            mark = "*" if meta.id in current else "-"
+            print(f"  {mark} {name} ({meta.id}) {description}", flush=True)
+
+    def _set_send_targets(self, args: str, tools: ChannelTools) -> None:
+        metadata = tools.joined_channel_metadata()
+        if not metadata:
+            print("[StdIOHumanAgent] 参加チャネルがありません。", flush=True)
+            return
+
+        if not args:
+            print("[StdIOHumanAgent] 送信先を指定してください。", flush=True)
+            return
+
+        try:
+            parts = shlex.split(args)
+        except ValueError as exc:
+            print(f"[StdIOHumanAgent] 解析に失敗しました: {exc}", flush=True)
+            return
+
+        if not parts:
+            print("[StdIOHumanAgent] 送信先を指定してください。", flush=True)
+            return
+
+        if any(part in {"*", "all"} for part in parts):
+            self._current_send_channels = []
+            self._print_current_targets(tools)
+            return
+
+        id_lookup = {meta.id: meta for meta in metadata}
+        name_lookup = {meta.name: meta for meta in metadata if meta.name}
+
+        selected: list[str] = []
+        for token in parts:
+            meta = id_lookup.get(token)
+            if meta is None:
+                meta = name_lookup.get(token)
+            if meta is None:
+                print(f"[StdIOHumanAgent] 未参加のチャネルです: {token}", flush=True)
+                return
+            if meta.id not in selected:
+                selected.append(meta.id)
+
+        if not selected:
+            print("[StdIOHumanAgent] 有効なチャネルが選択されませんでした。", flush=True)
+            return
+
+        self._current_send_channels = selected
+        self._print_current_targets(tools)
+
+    def _send_to_targets(self, tools: ChannelTools, content: str) -> None:
+        metadata = {meta.id: meta for meta in tools.joined_channel_metadata()}
+        targets = self._effective_targets(metadata)
+        if not targets:
+            print("[StdIOHumanAgent] 送信可能なチャネルがありません。", flush=True)
+            return
+        for channel_id in targets:
+            self._send_payload(tools, channel_id, content)
+
+    def _effective_targets(self, metadata: dict[str, Any]) -> list[str]:
+        if self._current_send_channels:
+            return [channel_id for channel_id in self._current_send_channels if channel_id in metadata]
+        return [channel_id for channel_id in metadata]
 
     def _generate_request_id(self) -> str:
         request_id = f"input-{self._request_index:03d}"

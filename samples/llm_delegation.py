@@ -8,7 +8,7 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Any, Iterable, Literal, Type, cast
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, ConfigDict, Field
 
 from nkaa.framework.agent import (
     AgentConfig,
@@ -40,7 +40,13 @@ FRONT_DESK_SYSTEM_PROMPT = (
     "incoming_channel.channel_name が 'analysis_workspace' で incoming_message.role が 'analysis_summary' のときは、"
     "要約をそのまま human_support へ届けるためのメッセージを作成してください。"
     "その他のケースでは出力せず無視します。"
-    '必ず {"output_channel": "available_channels の channel_name", "message": {...}} の JSON だけを返してください。'
+    "message には必ず role（例: analysis_request）と content（要約本文）を含め、必要なら request_id を文字列で設定してください。"
+    "Responses API の structured_output 機能で `StructuredChannelResponse` スキーマ（"
+    "output_channel: str, message: {role: str, content: str, request_id: Optional[str], metadata: Optional[dict[str, str]]}）"
+    "が適用されています。"
+    "構造化スキーマに適合するデータのみを返し、周囲に説明やコードブロック、余計な文字列を絶対に付与しないでください。"
+    "output_channel には available_channels.channel_name のいずれかを正確に指定し、"
+    "message.role と message.content は要件に沿った値にしてください。"
 )
 
 THINKING_SYSTEM_PROMPT = (
@@ -48,8 +54,12 @@ THINKING_SYSTEM_PROMPT = (
     "incoming_channel.channel_name が 'analysis_workspace' で incoming_message.role が 'analysis_request' のときだけ対応し、"
     "human_support の依頼内容とアウトラインを読み取って分析サマリー・結論・推奨アクションをまとめてください。"
     "結果は analysis_workspace に投稿し、role は 'analysis_summary' に設定してください。"
+    "message には role と content（分析結果テキスト）を必ず含め、必要に応じて request_id を文字列で設定してください。"
     "該当しないメッセージは無視します。"
-    '必ず {"output_channel": "available_channels の channel_name", "message": {...}} の JSON だけを返してください。'
+    "Responses API の structured_output 機能で `StructuredChannelResponse` スキーマが適用されています。"
+    "構造化スキーマに合致する出力のみを返し、余計なテキストは一切付けないでください。"
+    "output_channel には available_channels.channel_name のいずれかを指定し、"
+    "message.role は 'analysis_summary'、message.content には分析結果を記載してください。"
 )
 
 
@@ -57,9 +67,34 @@ def _channel_display_name(metadata: ChannelMetadata) -> str:
     return metadata.name or metadata.id
 
 
+def _summarize_payload(payload: Any, *, limit: int = 160) -> str:
+    try:
+        text = (
+            json.dumps(payload, ensure_ascii=False)
+            if isinstance(payload, (dict, list))
+            else str(payload)
+        )
+    except Exception:  # pragma: no cover - 予期せぬシリアライズ失敗時
+        text = repr(payload)
+    if len(text) <= limit:
+        return text
+    return text[: limit - 3] + "..."
+
+
+class StructuredChannelMessage(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    role: str
+    content: str
+    request_id: str | None = None
+    metadata: dict[str, str] | None = None
+
+
 class StructuredChannelResponse(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
     output_channel: str
-    message: dict[str, Any]
+    message: StructuredChannelMessage
 
 
 @dataclass
@@ -133,6 +168,13 @@ class DelegationLLMAgent(BaseAgent[DelegationAgentTools]):
             if incoming is None:
                 logger.debug("Skipping message from unexpected channel %s", message.channel_id)
                 continue
+            logger.info(
+                "Agent %s received message via %s from %s: %s",
+                self.agent_id,
+                _channel_display_name(incoming),
+                message.sender_id,
+                _summarize_payload(payload),
+            )
             available_channels = [
                 {
                     "channel_name": _channel_display_name(meta),
@@ -153,7 +195,6 @@ class DelegationLLMAgent(BaseAgent[DelegationAgentTools]):
                     "incoming_message": payload,
                     "available_channels": available_channels,
                 },
-                max_output_tokens=600,
             )
             target: str | None = None
             trimmed = dispatch.output_channel.strip()
@@ -174,7 +215,7 @@ class DelegationLLMAgent(BaseAgent[DelegationAgentTools]):
                     message.channel_id,
                 )
                 target = message.channel_id
-            tools.channels.send(target, dispatch.message)
+            tools.channels.send(target, dispatch.message.model_dump())
 
 
 def invoke_structured_llm(
@@ -183,7 +224,6 @@ def invoke_structured_llm(
     model: str,
     system_prompt: str,
     payload: dict[str, Any],
-    max_output_tokens: int | None = None,
 ) -> StructuredChannelResponse:
     messages = [
         {"role": "system", "content": system_prompt},
@@ -192,12 +232,22 @@ def invoke_structured_llm(
     incoming = payload.get("incoming_channel", {})
     channel_name = incoming.get("channel_name") if isinstance(incoming, dict) else "n/a"
     logger.info("LLM call channel=%s model=%s", channel_name, model)
-    return llm.call_parsed(
-        messages,
-        parse_model=StructuredChannelResponse,
-        model_name=model,
-        max_output_tokens=max_output_tokens,
-    )
+    try:
+        return llm.call_parsed(
+            messages,
+            parse_model=StructuredChannelResponse,
+            model_name=model,
+        )
+    except Exception as exc:
+        prompt_dump = json.dumps(messages, ensure_ascii=False, indent=2)
+        payload_dump = json.dumps(payload, ensure_ascii=False, indent=2)
+        logger.error(
+            "LLM call failed. system_prompt=%s\nmessages=%s\npayload=%s",
+            system_prompt,
+            prompt_dump,
+            payload_dump,
+        )
+        raise
 
 
 def delegation_adapter(agent: BaseAgent[Any], manager_tools: DelegationManagerTools) -> BaseTools:
