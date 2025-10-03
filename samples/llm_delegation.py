@@ -21,7 +21,14 @@ from nkaa.framework.agent import (
 from nkaa.framework.channels import ChannelManager, DatabaseChannelConfig, InMemoryChannelRepository
 from nkaa.framework.channels.models import ChannelMetadata
 from nkaa.framework.tools import ChannelTools
-from nkaa.presets.agents import StdIOHumanAgent, StdIOHumanAgentConfig, StdIOHumanAgentTools
+from nkaa.presets.agents import (
+    StdIOHumanAgent,
+    StdIOHumanAgentConfig,
+    StdIOHumanAgentTools,
+    TextualHumanAgent,
+    TextualHumanAgentConfig,
+    TextualHumanAgentTools,
+)
 from nkaa.presets.tools import LLMCallTool
 
 
@@ -254,6 +261,8 @@ def delegation_adapter(agent: BaseAgent[Any], manager_tools: DelegationManagerTo
     base_channel_tools = ChannelTools(agent_id=agent.agent_id, manager=manager_tools.channel_manager)
     if isinstance(agent, DelegationLLMAgent):
         return DelegationAgentTools(channels=base_channel_tools, llm=manager_tools.llm)
+    if isinstance(agent, TextualHumanAgent):
+        return TextualHumanAgentTools(channels=base_channel_tools)
     return StdIOHumanAgentTools(channels=base_channel_tools)
 
 
@@ -272,6 +281,7 @@ class DelegationLLMAgentConfig(AgentConfig):
 
 AGENT_TYPE_REGISTRY: dict[str, Type[AgentConfig]] = {
     "stdio_human": StdIOHumanAgentConfig,
+    "textual_human": TextualHumanAgentConfig,
     "delegation_llm": DelegationLLMAgentConfig,
 }
 
@@ -308,7 +318,7 @@ def configure_delegation_channels(manager: StandardManager) -> None:
     )
     human = manager.get_agent(
         "human",
-        expected_type=StdIOHumanAgent,
+        expected_type=TextualHumanAgent,
     )
 
     human_channel_id = channel_manager.create(
@@ -342,9 +352,9 @@ def prepare_configs(base_dir: Path) -> None:
         config_path.unlink()
     configs: Iterable[tuple[str, dict[str, Any]]] = [
         (
-            "01_stdio_human.json",
+            "01_textual_human.json",
             {
-                "type": "stdio_human",
+                "type": "textual_human",
                 "id": "human",
                 "response_role": "human",
                 "history_dir": str(history_dir),

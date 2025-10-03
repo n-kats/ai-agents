@@ -23,6 +23,7 @@
 - [ ] ツール/アダプターの高度な利用例は未整備（アクセス制御・永続化されたチャネルなどは今後の課題）。
 - [ ] CLI / GUI など人間インタラクション専用のツールセットとエージェント定義は未実装（`HumanInteractionAgent` の設計とプリセット追加が必要）。
   - [x] Textual ベースの人間エージェントを追加し、対話 UI を拡張可能なプリセットを用意 (`nkaa/presets/agents/textual_human.py`).
+  - [x] TextualHumanAgent がメインスレッド以外で実行されてもシグナル登録エラーで停止しないよう改善。
 
 ## Presets
 - [x] シングルエージェント向けプリセットとツール束ねの例が存在 (`nkaa/presets/managers/single_agent_model.py`).
@@ -36,6 +37,7 @@
 - [x] LLM 協調サンプルを `samples/llm_delegation.py` として追加し、複数チャネル活用例を提示。
   - [x] `StandardManager.run()` パターンへ移行し、スレッド実行・停止シグナル・ストレージ連携を整理。
   - [x] 人間エージェントをプリセットの `StdIOHumanAgent` へ統合し、サンプルでのツール再利用を一本化。
+  - [x] Textual ベース UI の `TextualHumanAgent` をサンプルで利用し、入力中でも他チャネルからの更新を確認できるようにした。
   - [x] カスタムツールクラスを廃止し、`ChannelTools` を直接所有する構成で停止シグナルをエージェントへ伝播。
   - [x] 2 つの LLM エージェントを `DelegationLLMAgent` に統合し、プロンプト差分のみで役割を切り替えられるよう簡素化。
   - [x] LLM ツールは `DelegationAgentTools` で共有し、`attach_*` に頼らずアダプター経由で依存を渡す構成へ修正。

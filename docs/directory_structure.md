@@ -26,6 +26,7 @@
 ## `docs/` 配下
 - `concept.md` : 現行コンセプトと設計概要。
 - `implementation_status.md` : 実装進捗チェックリスト。
+- `features/` : 機能別ドキュメント。例: Textual 人間エージェント UI の概要。
 - `channel_persistence_plan.md` : PostgreSQL を用いたチャンネル永続化案。
 - `channel_spec.md` : チャンネル仕様の決定事項および未解決課題のまとめ。
 - `samples_guideline.md` : `samples/` 配下のサンプル実装方針と運用ルール。

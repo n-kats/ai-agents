@@ -16,7 +16,9 @@ dependencies = [
     "python-dotenv>=1.1.0",
     "tavily-python>=0.5.4",
     "sqlalchemy>=2.0.36",
+    "textual-dev>=1.7.0",
     "textual>=6.2.1",
+    "loguru>=0.7.3",
 ]
 license = { text = "MIT" }
 

@@ -1,9 +1,15 @@
 from __future__ import annotations
 
+import inspect
 import json
+import logging
+import signal
+import threading
+from contextlib import contextmanager
 from dataclasses import dataclass
+from importlib import import_module
 from pathlib import Path
-from typing import Any, Iterable, Literal
+from typing import Any, Iterable, Iterator, Literal, cast
 
 from pydantic import Field
 
@@ -19,13 +25,61 @@ try:  # pragma: no cover - Textual は環境により未インストールの場
     from textual.containers import Container, Horizontal
     from textual.events import Mount
     from textual.reactive import reactive
-    from textual.widgets import Button, Footer, Header, Input, Select, Static, TextLog
+    from textual.widgets import Button, Footer, Header, Input, Select, Static
+    try:  # Textual のバージョン差異に対応
+        from textual.widgets import TextLog as TextLog
+    except ImportError:  # pragma: no cover - 新旧両対応
+        try:
+            from textual.widgets import Log as TextLog
+        except ImportError:
+            try:
+                from textual.widgets import RichLog as TextLog
+            except ImportError:
+                TextLog = cast(
+                    type[Any],
+                    getattr(import_module("textual.widgets.text_log"), "TextLog"),
+                )
 except ImportError as exc:  # pragma: no cover - 実行環境依存
-    App = None  # type: ignore[assignment]
-    ComposeResult = Iterable  # type: ignore[assignment]
+    App = None
+    ComposeResult = Iterable
     _TEXTUAL_IMPORT_ERROR: ImportError | None = exc
 else:
     _TEXTUAL_IMPORT_ERROR = None
+
+
+logger = logging.getLogger(__name__)
+
+_TextualHumanApp: type[Any]
+
+
+@contextmanager
+def _suppress_signal_registration_errors() -> Iterator[None]:
+    """Temporarily suppress `signal.signal` errors outside theメインスレッド."""
+
+    original_signal = signal.signal
+
+    warning_emitted = False
+
+    def safe_signal_handler(sig: int, handler: Any) -> Any:
+        try:
+            return original_signal(sig, handler)
+        except ValueError as exc:  # pragma: no cover - signal 制限時のみ
+            if "signal only works in main thread" not in str(exc):
+                raise
+            nonlocal warning_emitted
+            if not warning_emitted:
+                logger.warning(
+                    "Textual のシグナルハンドラを登録できませんでした。"
+                    "一部の端末機能 (再描画・サスペンドなど) が無効になります。"
+                )
+                warning_emitted = True
+            return handler
+
+    setattr(signal, "signal", safe_signal_handler)
+    try:
+        yield
+    finally:
+        setattr(signal, "signal", original_signal)
 
 
 @dataclass
@@ -57,7 +111,7 @@ class TextualHumanAgent(BaseAgent[TextualHumanAgentTools]):
         self.request_id_key = request_id_key
         self._request_index = 1
         self._stop_requested = False
-        self._app: _TextualHumanApp | None = None
+        self._app: Any | None = None
         self._history: StdIOHumanHistory | None = (
             StdIOHumanHistory(history_path) if history_path is not None else None
         )
@@ -73,7 +127,11 @@ class TextualHumanAgent(BaseAgent[TextualHumanAgentTools]):
         app = _TextualHumanApp(self, tools)
         self._app = app
         try:
-            app.run()
+            if threading.current_thread() is threading.main_thread():
+                app.run()
+            else:
+                with _suppress_signal_registration_errors():
+                    app.run()
         finally:
             self._app = None
 
@@ -171,7 +229,29 @@ class TextualHumanAgent(BaseAgent[TextualHumanAgentTools]):
 
 if App is not None:
 
-    class _TextualHumanApp(App[None]):  # type: ignore[type-arg]
+    def _create_text_log_widget(widget_id: str) -> TextLog:
+        """Textual のバージョン差異に対応したログウィジェット生成ヘルパー。"""
+        parameters = inspect.signature(TextLog.__init__).parameters
+        kwargs: dict[str, Any] = {"id": widget_id}
+        if "markup" in parameters:
+            kwargs["markup"] = False
+        if "highlight" in parameters:
+            kwargs["highlight"] = False
+        return TextLog(**kwargs)
+
+    def _create_select_widget(widget_id: str) -> Select[str]:
+        """Select ウィジェットの互換生成ヘルパー。"""
+        kwargs: dict[str, Any] = {
+            "prompt": "送信先を選択",
+            "allow_blank": False,
+            "id": widget_id,
+        }
+        try:
+            return Select[str]([("すべてのチャネル", "__all__")], **kwargs)
+        except TypeError:  # pragma: no cover - 旧 API 対応
+            return Select[str](**kwargs)
+
+    class _RealTextualHumanApp(App[None]):
         CSS = """
         Screen {
             layout: vertical;
@@ -216,20 +296,17 @@ if App is not None:
             self._log: TextLog | None = None
             self._status: Static | None = None
             self._channel_select: Select[str] | None = None
+            self._input: Input | None = None
 
         def compose(self) -> ComposeResult:
             yield Header(show_clock=True)
             with Horizontal(id="app-body"):
                 with Container(id="channel-panel"):
                     yield Static("送信先チャネル", id="channel-title")
-                    yield Select[str](
-                        id="channel-select",
-                        prompt="送信先を選択",
-                        allow_blank=False,
-                    )
+                    yield _create_select_widget("channel-select")
                     yield Button("チャネルを更新", id="refresh-button")
                 with Container(id="log-panel"):
-                    yield TextLog(id="log", markup=False, highlight=False)
+                    yield _create_text_log_widget("log")
                     yield Static("", id="status")
                     yield Input(placeholder="メッセージを入力 (Enter で送信)", id="message-input")
             yield Footer()
@@ -237,10 +314,12 @@ if App is not None:
         def on_mount(self, event: Mount) -> None:  # pragma: no cover - UI イベント
             del event
             self._log = self.query_one(TextLog)
-            self._status = self.query_one(Static, "#status")
-            self._channel_select = self.query_one(Select)
+            self._status = cast(Static, self.query_one("#status"))
+            self._channel_select = cast(Select[str], self.query_one("#channel-select"))
+            self._input = cast(Input, self.query_one("#message-input"))
             self._update_channel_options()
             self._set_status("Textual Human Agent is ready.")
+            self._focus_input()
             self.set_interval(0.3, self._poll_messages)
 
         def action_refresh_channels(self) -> None:  # pragma: no cover - UIイベント
@@ -262,7 +341,7 @@ if App is not None:
             try:
                 self._channel_select.set_options(options)
             except AttributeError:  # pragma: no cover - Textual バージョン差異
-                self._channel_select.options = options  # type: ignore[attr-defined]
+                setattr(self._channel_select, "options", options)
             if self.selected_channel not in {value for _, value in options}:
                 self.selected_channel = "__all__"
             self._channel_select.value = self.selected_channel
@@ -302,6 +381,7 @@ if App is not None:
             self._set_status(
                 f"送信完了: {self._describe_selected_channel()} ({len(targets)} 件)"
             )
+            self._focus_input()
 
         def _determine_targets(self) -> list[str]:
             metadata = {meta.id: meta for meta in self._tools.channels.joined_channel_metadata()}
@@ -323,6 +403,7 @@ if App is not None:
             if self._agent.stop_requested():
                 self.request_close()
                 return
+            received = False
             for _ in range(8):
                 message = self._tools.channels.read()
                 if message is None:
@@ -335,6 +416,9 @@ if App is not None:
                 if request_id:
                     header += f" request_id={request_id}"
                 self._write_log(f"{header}\n{payload_text}")
+                received = True
+            if received:
+                self._focus_input()
 
         def _write_log(self, text: str) -> None:
             if self._log is None:
@@ -346,13 +430,21 @@ if App is not None:
             if self._status is not None:
                 self._status.update(text)
 
+        def _focus_input(self) -> None:
+            if self._input is not None:
+                self._input.focus()
+
+    _TextualHumanApp = _RealTextualHumanApp
+
 else:
 
-    class _TextualHumanApp:  # pragma: no cover - Textual 未導入時
+    class _StubTextualHumanApp:  # pragma: no cover - Textual 未導入時
         def __init__(self, *args: Any, **kwargs: Any) -> None:
             raise RuntimeError(
                 "textual がインストールされていません。`pip install textual` を実行してください。"
             ) from _TEXTUAL_IMPORT_ERROR
+
+    _TextualHumanApp = _StubTextualHumanApp
 
 
 class TextualHumanAgentConfig(AgentConfig):
