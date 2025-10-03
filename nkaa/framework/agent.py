@@ -3,7 +3,7 @@ import multiprocessing
 import threading
 from abc import ABC, abstractmethod
 from pathlib import Path
-from typing import Any, Callable, Generic, Type, TypeVar, cast, Protocol
+from typing import Any, Callable, Generic, Protocol, Type, TypeVar, cast
 
 from pydantic import BaseModel
 
@@ -58,6 +58,9 @@ class BaseAgent(ABC, Generic[TTools]):
         エージェントの状態を保存するメソッド。
         """
         pass
+
+
+TSpecificAgent = TypeVar("TSpecificAgent", bound="BaseAgent[Any]")
 
 
 class AgentConfig(BaseModel):
@@ -198,9 +201,14 @@ class StandardManager(BaseManager, Generic[TManagerConfig, TManagerTools, TTools
                 エージェントにツールを適用するためのアダプター関数。
         """
         self.config = config
-        self.agents: list[BaseAgent[TTools]] = [
-            self._load_agent(config_path) for config_path in config.get_agent_config_paths()
-        ]
+        self._agents_by_id: dict[str, BaseAgent[TTools]] = {}
+        self.agents: list[BaseAgent[TTools]] = []
+        for config_path in config.get_agent_config_paths():
+            agent_id, agent = self._load_agent(config_path)
+            if agent_id in self._agents_by_id:
+                raise ValueError(f"Duplicate agent id detected: {agent_id}")
+            self.agents.append(agent)
+            self._agents_by_id[agent_id] = agent
         self.adapter = adapter
         self.execution_backend = execution_backend or MultiprocessingManagerExecutionBackend()
         self.stop_event = self.execution_backend.create_event()
@@ -208,20 +216,54 @@ class StandardManager(BaseManager, Generic[TManagerConfig, TManagerTools, TTools
         self.tools = tools
         self.agent_processes: list[_WorkerHandle] = []
 
-    def _load_agent(self, config_path: Path) -> BaseAgent[TTools]:
+    def _load_agent(self, config_path: Path) -> tuple[str, BaseAgent[TTools]]:
         """
         指定された設定ファイルからエージェントをロードするメソッド。
         Args:
             config_path (Path): エージェントの設定ファイルのパス。
         Returns:
-            BaseAgent[TTools]: ロードされたエージェントのインスタンス。
+            tuple[str, BaseAgent[TTools]]: エージェントIDとインスタンス。
         """
         raw_text = config_path.read_text()
         data = json.loads(raw_text)
         agent_config_type = self.config.get_agent_config_type(data["type"])
         agent_config = agent_config_type.model_validate_json(raw_text)
         agent = cast(BaseAgent[TTools], agent_config.build())
+        configured_agent_id = agent_config.id
+        runtime_agent_id = getattr(agent, "agent_id", configured_agent_id)
+        if runtime_agent_id != configured_agent_id:
+            raise ValueError(
+                "Agent ID mismatch: config specifies '{config}', but agent exposes '{runtime}'.".format(
+                    config=configured_agent_id,
+                    runtime=runtime_agent_id,
+                )
+            )
         agent.load()
+        return configured_agent_id, agent
+
+    def get_agent(
+        self,
+        agent_id: str,
+        *,
+        expected_type: type[TSpecificAgent] | None = None,
+    ) -> BaseAgent[TTools] | TSpecificAgent:
+        """ID でエージェントを取得するヘルパー。"""
+
+        try:
+            agent = self._agents_by_id[agent_id]
+        except KeyError as exc:  # pragma: no cover - defensive path
+            raise KeyError(f"Agent with id '{agent_id}' is not registered.") from exc
+
+        if expected_type is not None:
+            if not isinstance(agent, expected_type):
+                raise TypeError(
+                    "Agent '{agent_id}' is of type '{actual}' (expected '{expected}').".format(
+                        agent_id=agent_id,
+                        actual=type(agent).__name__,
+                        expected=expected_type.__name__,
+                    )
+                )
+            return cast(TSpecificAgent, agent)
         return agent
 
     def apply_adapter(self, agent: BaseAgent[TTools]) -> TTools:

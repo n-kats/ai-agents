@@ -2,17 +2,21 @@ from __future__ import annotations
 
 import os
 from dataclasses import dataclass, field
-from typing import Any, Iterable, Literal, Sequence, TypeVar
+from typing import Any, Iterable, Literal, Sequence, TypeVar, cast
 
-from nkaa.framework.agent import BaseTools
 from pydantic import BaseModel, ConfigDict, Field
 
+from nkaa.framework.agent import BaseTools
+
+OpenAI: type[Any] | None
+
 try:  # pragma: no cover - openai が未インストールの場合の補助
-    from openai import OpenAI
+    from openai import OpenAI as _RuntimeOpenAI
 except ImportError as exc:  # pragma: no cover - 実行環境に依存
-    OpenAI = None  # type: ignore[assignment]
-    _OPENAI_IMPORT_ERROR = exc
+    OpenAI = None
+    _OPENAI_IMPORT_ERROR: ImportError | None = exc
 else:
+    OpenAI = cast(type[Any], _RuntimeOpenAI)
     _OPENAI_IMPORT_ERROR = None
 
 
@@ -103,6 +107,24 @@ class LLMCallTool(BaseTools):
             raise RuntimeError("LLM から有効な出力が得られませんでした。")
         return text
 
+    def call(
+        self,
+        *,
+        prompt: str,
+        model_name: str | None = None,
+        max_output_tokens: int | None = None,
+        **params: Any,
+    ) -> str:
+        """ワンショットのユーザープロンプトを渡してテキスト出力を得るヘルパー。"""
+
+        messages = [{"role": "user", "content": prompt}]
+        return self.call_text(
+            messages,
+            model_name=model_name,
+            max_output_tokens=max_output_tokens,
+            **params,
+        )
+
     def call_json(
         self,
         messages: Sequence[dict[str, Any]] | Iterable[dict[str, Any]],
@@ -165,13 +187,13 @@ class LLMCallTool(BaseTools):
             if isinstance(node, str):
                 return node
             if isinstance(node, (list, tuple)):
-                parts: list[str] = []
+                list_parts: list[str] = []
                 for item in node:
                     maybe = _maybe_text(item)
                     if maybe:
-                        parts.append(maybe)
-                if parts:
-                    return "\n".join(parts)
+                        list_parts.append(maybe)
+                if list_parts:
+                    return "\n".join(list_parts)
                 return None
             if isinstance(node, dict):
                 if "value" in node and isinstance(node["value"], str):
@@ -180,54 +202,54 @@ class LLMCallTool(BaseTools):
                     return _maybe_text(node["text"])
                 if "content" in node:
                     return _maybe_text(node["content"])
-                parts: list[str] = []
+                dict_parts: list[str] = []
                 for value in node.values():
                     maybe = _maybe_text(value)
                     if maybe:
-                        parts.append(maybe)
-                if parts:
-                    return "\n".join(parts)
+                        dict_parts.append(maybe)
+                if dict_parts:
+                    return "\n".join(dict_parts)
                 return None
             if hasattr(node, "value") and isinstance(getattr(node, "value"), str):
-                return getattr(node, "value")
+                return str(getattr(node, "value"))
             if hasattr(node, "text"):
                 return _maybe_text(getattr(node, "text"))
             if hasattr(node, "content"):
                 return _maybe_text(getattr(node, "content"))
             if hasattr(node, "model_dump"):
-                return _maybe_text(node.model_dump())  # type: ignore[arg-type]
+                return _maybe_text(node.model_dump())
             return None
 
-        parts: list[str] = []
+        collected_parts: list[str] = []
 
         output = getattr(response, "output", None)
         if output:
             for item in output:
                 maybe = _maybe_text(getattr(item, "content", None))
                 if maybe:
-                    parts.append(maybe)
+                    collected_parts.append(maybe)
 
-        if not parts:
+        if not collected_parts:
             data = getattr(response, "data", None)
             if data:
                 for item in data:
                     maybe = _maybe_text(getattr(item, "content", None))
                     if maybe:
-                        parts.append(maybe)
+                        collected_parts.append(maybe)
 
-        if not parts and hasattr(response, "choices"):
+        if not collected_parts and hasattr(response, "choices"):
             for choice in getattr(response, "choices", []):
                 maybe = _maybe_text(getattr(choice, "message", None))
                 if maybe:
-                    parts.append(maybe)
+                    collected_parts.append(maybe)
 
-        if not parts and hasattr(response, "model_dump"):
-            dumped = response.model_dump()  # type: ignore[attr-defined]
+        if not collected_parts and hasattr(response, "model_dump"):
+            dumped = response.model_dump()
             maybe = _maybe_text(dumped)
             if maybe:
-                parts.append(maybe)
+                collected_parts.append(maybe)
 
-        aggregated = "\n".join(part.strip() for part in parts if part)
+        aggregated = "\n".join(part.strip() for part in collected_parts if part)
         if aggregated.strip():
             return aggregated.strip()
 

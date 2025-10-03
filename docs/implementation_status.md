@@ -11,6 +11,7 @@
 - [x] チャンネル周りを専用パッケージへ再編し、`ChannelManager`・`ChannelTools`・キュー・リポジトリの責務を整理 (`nkaa/framework/channels/`, `nkaa/framework/tools.py`).
 - [x] PostgreSQL / SQLite 向け `SQLChannelRepository` を追加し、履歴・未読テーブルと `save()` スナップショットの永続化を実装。
 - [x] `ChannelTools.joined_channel_metadata()` を追加し、参加済みチャネルのメタデータを簡便に取得できる API を提供。
+- [x] `StandardManager.get_agent()` を追加し、`agent_id` からエージェントを直接取得できるよう整理 (`nkaa/framework/agent.py:244`).
 - [ ] エージェントが能動的にチャネル検索・購読できる API 設計（検索条件やアクセス制御など）。
   - [x] `ChannelSearchQuery`・`ChannelManager.search_channels`・`ChannelTools.search`/`join_matching` を追加し、メタデータ条件での検索と自動参加をサポート。
 - [ ] メッセージペイロードのバージョニング/検証ルールと後方互換性戦略の策定。
@@ -46,6 +47,7 @@
   - [x] サンプル全体を約半分の行数へ整理し、役割切替ロジックと設定を単純化。
   - [x] チャネル説明のみを用いて出力先を選択できるようエージェント／チャンネルの role 分岐を廃止し、プロンプト制御へ一本化。
   - [x] Delegation サンプルで `ChannelTools` の標準実装を直接利用するよう整理し、参加済みチャネルだけを扱うロジックを共有化。
+  - [x] `samples/llm_delegation.py` で発生していた `dataclass` 未 import による実行時エラーを修正。
 - [ ] 実行可能なエンドツーエンド例はまだ整っていない。
 - [x] ライブラリ全体構造を説明するマーメイド図を `docs/library_structure.md` に追加。
 - [x] `ChannelTools.read` を `receive` と同等の実装へ更新し、チャネルID引数を廃止して内部で参加チャネルのみを返すよう統一。

@@ -1,7 +1,7 @@
 from dataclasses import dataclass
 from multiprocessing import Event
 from pathlib import Path
-from typing import Callable, Literal, Type
+from typing import Callable, Literal, Type, cast
 
 from pydantic import BaseModel
 
@@ -188,14 +188,34 @@ class SingleAgentModel(StandardManager[SingleAgentModelConfig, SingleAgentTools,
             self.tools.stop_tool = self.create_stop_event_tool()
 
     @classmethod
-    def initialize_or_load(cls, storage_dir: Path) -> "SingleAgentModel":
-        config = SingleAgentModelConfig(data_root_dir=storage_dir)
-        tools = config.build_tools()
-        return cls(
-            config,
-            single_agent_model_adapter,
-            tools=tools,
+    def initialize_or_load(
+        cls,
+        storage_dir: Path,
+        *,
+        config_factory: Callable[[Path], SingleAgentModelConfig] | None = None,
+        adapter: Callable[[BaseAgent[SingleAgentTools], SingleAgentTools], SingleAgentTools] | None = None,
+        tools_factory: Callable[[SingleAgentModelConfig], SingleAgentTools] | None = None,
+        execution_backend: ManagerExecutionBackend | None = None,
+    ) -> "SingleAgentModel":
+        def default_config_factory(path: Path) -> SingleAgentModelConfig:
+            return SingleAgentModelConfig(data_root_dir=path)
+
+        resolved_config_factory = config_factory or default_config_factory
+        resolved_adapter = adapter or single_agent_model_adapter
+
+        def default_tools_factory(config: SingleAgentModelConfig) -> SingleAgentTools:
+            return config.build_tools()
+
+        resolved_tools_factory = tools_factory or default_tools_factory
+
+        manager = super().initialize_or_load(
+            storage_dir,
+            config_factory=resolved_config_factory,
+            adapter=resolved_adapter,
+            tools_factory=resolved_tools_factory,
+            execution_backend=execution_backend,
         )
+        return cast("SingleAgentModel", manager)
 
 
 def single_agent_model_adapter(agent: BaseAgent[SingleAgentTools], tools: SingleAgentTools) -> SingleAgentTools:

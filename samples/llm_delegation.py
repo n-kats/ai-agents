@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import json
 import logging
+from dataclasses import dataclass
 from pathlib import Path
 from typing import Any, Iterable, Literal, Type, cast
 
@@ -247,26 +248,18 @@ def configure_delegation_channels(manager: StandardManager) -> None:
     tools = cast(DelegationManagerTools, manager.tools)
     channel_manager = tools.channel_manager
 
-    front_desk = next(
-        (
-            agent
-            for agent in manager.agents
-            if isinstance(agent, DelegationLLMAgent) and agent.agent_id == "front_desk_agent"
-        ),
-        None,
+    front_desk = manager.get_agent(
+        "front_desk_agent",
+        expected_type=DelegationLLMAgent,
     )
-    thinker = next(
-        (
-            agent
-            for agent in manager.agents
-            if isinstance(agent, DelegationLLMAgent) and agent.agent_id == "thinking_agent"
-        ),
-        None,
+    thinker = manager.get_agent(
+        "thinking_agent",
+        expected_type=DelegationLLMAgent,
     )
-    human = next((agent for agent in manager.agents if isinstance(agent, StdIOHumanAgent)), None)
-
-    if front_desk is None or thinker is None or human is None:
-        raise RuntimeError("llm_delegation sample expects front desk, thinking, and human agents.")
+    human = manager.get_agent(
+        "human",
+        expected_type=StdIOHumanAgent,
+    )
 
     human_channel_id = channel_manager.create(
         DatabaseChannelConfig(
