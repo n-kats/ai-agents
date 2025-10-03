@@ -22,6 +22,7 @@
 - [x] 複数チャネルを束ねる `ChannelTools` の雛形を追加済み (`nkaa/framework/tools.py`).
 - [ ] ツール/アダプターの高度な利用例は未整備（アクセス制御・永続化されたチャネルなどは今後の課題）。
 - [ ] CLI / GUI など人間インタラクション専用のツールセットとエージェント定義は未実装（`HumanInteractionAgent` の設計とプリセット追加が必要）。
+  - [x] Textual ベースの人間エージェントを追加し、対話 UI を拡張可能なプリセットを用意 (`nkaa/presets/agents/textual_human.py`).
 
 ## Presets
 - [x] シングルエージェント向けプリセットとツール束ねの例が存在 (`nkaa/presets/managers/single_agent_model.py`).
