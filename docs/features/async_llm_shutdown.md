@@ -20,10 +20,11 @@ Textual UI からの終了要求でマネージャを即時停止させたいが
 - 内部キューは `asyncio.PriorityQueue` へ移行し、既存の同期 API との後方互換を保つラッパーを用意する。
 - 未読スナップショット保存やメンバーシップ操作でデータ競合が起きないよう、`asyncio.Lock` または `contextlib.AsyncExitStack` を活用した排他制御ポリシーを定義する。
 
-### 2. エージェント実行バックエンドの非同期化
-- `ThreadingManagerExecutionBackend` を拡張し、エージェントごとに専用の `asyncio` イベントループを生成して `loop.run_until_complete(agent.run_async(...))` の形で動かす実装を検討する。
-- `DelegationLLMAgent` に `async def run_async(...)` を追加し、チャネル読み取り・LLM 呼び出し・結果送信を `await` で繋ぐ。
-- `stop()` 要求を受けたら、イベントループ上で全タスクを `cancel()` → `gather(..., return_exceptions=True)` で待機し、履歴保存後にループを停止するフローを定義する。
+### 2. マネージャーとエージェントの実行パターン見直し
+- `StandardManager`（もしくはプリセットのマネージャー）に `async def run_async()` を追加し、実行キューのポーリング・停止シグナル処理・エージェントタスク管理をイベントループ主体で行う。
+- 既存の `run()` による互換運用は必須としない。必要な場合は `run()` から `asyncio.run(run_async())` を呼び出す薄いラッパーを提供する。
+- スレッド／プロセス構成は維持する想定とし、各ワーカーが専用のイベントループを持ち `loop.run_until_complete(agent.run_async(...))` で実務処理を行う。これにより、マルチスレッドをやめずに非同期化を取り込める。
+- `DelegationLLMAgent` などエージェント実装は `async def run_async(...)` を新設し、チャネル読み取り・LLM 呼び出し・結果送信を `await` で繋ぐ。停止要求受信時はタスクキャンセル → 状態保存 → ループ停止の順でシーケンスを管理する。
 
 ### 3. `LLMCallTool` のキャンセル対応
 - OpenAI SDK を `async` 版で利用し、`await client.responses.create(...)` の形で呼び出す。
@@ -49,4 +50,3 @@ Textual UI からの終了要求でマネージャを即時停止させたいが
 2. `DelegationLLMAgent` / `LLMCallTool` を非同期実装へ移行し、同期ラッパーの互換性テストを実施する。
 3. Textual UI からの停止要求で `asyncio` タスクキャンセルが期待通り伝播する統合テストを整備する。
 4. ドキュメント（本ページおよび `docs/concept.md`）に停止シーケンスとキャンセル仕様を追記し、利用者への影響を明確化する。
-
