@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import asyncio
 from typing import Callable
 
 import pytest
@@ -13,6 +14,7 @@ from nkaa.framework.channels import (
     InMemoryChannelRepository,
     SQLChannelRepository,
 )
+from nkaa.framework.channels.models import ChannelMessage
 from nkaa.framework.channels.repository import ChannelRepository
 from nkaa.framework.tools import ChannelTools
 
@@ -142,3 +144,26 @@ def test_channel_search_and_auto_join(repository_factory: RepositoryFactory) -> 
     # 再度 join_matching を呼んでも既存参加チャネルは重複しない
     again = tools.join_matching(attribute_query)
     assert again == ()
+
+
+def test_channel_tools_async_send_and_read(repository_factory: RepositoryFactory) -> None:
+    repository = repository_factory()
+    if not isinstance(repository, InMemoryChannelRepository):
+        pytest.skip("Async channel smoke test is limited to in-memory repository for now")
+    manager = ChannelManager(repository)
+    channel = manager.create(DatabaseChannelConfig(name="async"))
+
+    sender = ChannelTools(agent_id="sender", manager=manager)
+    receiver = ChannelTools(agent_id="receiver", manager=manager)
+    sender.join(channel.id)
+    receiver.join(channel.id)
+
+    async def scenario() -> None:
+        stored = await sender.send_async(channel.id, payload={"text": "async hello"})
+        assert stored.message_id is not None
+        message = await receiver.read_async(poll_interval=0.05)
+        assert isinstance(message, ChannelMessage)
+        assert message.message_id == stored.message_id
+        assert message.payload == {"text": "async hello"}
+
+    asyncio.run(scenario())

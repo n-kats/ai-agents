@@ -1,11 +1,13 @@
 from __future__ import annotations
 
+import asyncio
 from dataclasses import dataclass
 from typing import Any, Sequence
 
 from nkaa.framework.agent import BaseTools
 from nkaa.framework.channels.manager import ChannelManager
 from nkaa.framework.channels.models import ChannelMessage, ChannelMetadata, ChannelSearchQuery, UnreadRecord
+from nkaa.framework.messages import StopMessage
 
 
 @dataclass
@@ -95,6 +97,24 @@ class ChannelTools(BaseTools):
         )
         return self.manager.write(channel_id, message)
 
+    async def send_async(
+        self,
+        channel_id: str,
+        payload: Any,
+        *,
+        priority: int | None = None,
+        metadata: dict[str, Any] | None = None,
+    ) -> ChannelMessage:
+        """非同期にメッセージを書き込む。"""
+
+        return await asyncio.to_thread(
+            self.send,
+            channel_id,
+            payload,
+            priority=priority,
+            metadata=metadata,
+        )
+
     def read(
         self,
         *,
@@ -104,6 +124,31 @@ class ChannelTools(BaseTools):
             self.agent_id,
             block=block,
         )
+
+    async def read_async(
+        self,
+        *,
+        poll_interval: float = 0.5,
+        stop_event: asyncio.Event | None = None,
+        allowed_channels: Sequence[str] | None = None,
+    ) -> ChannelMessage | StopMessage | None:
+        """非同期に未読メッセージを取得する。"""
+
+        while True:
+            if stop_event is not None and stop_event.is_set():
+                return StopMessage(reason="stop_event_set")
+            message = await asyncio.to_thread(
+                self.manager.read_for_agent,
+                self.agent_id,
+                block=True,
+                timeout=poll_interval,
+                allowed_channels=allowed_channels,
+            )
+            if message is not None:
+                return message
+            if stop_event is not None and stop_event.is_set():
+                return StopMessage(reason="stop_event_set")
+            await asyncio.sleep(0)
 
     # ------------------------------------------------------------------
     # Introspection helpers

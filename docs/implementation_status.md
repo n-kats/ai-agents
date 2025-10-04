@@ -28,12 +28,15 @@
   - [x] TextualHumanAgent に LogPanelAdapter を組み込み、タブ切り替えでチャット／ログを表示し、レベル・エージェント・チャネルで絞り込めるよう整備。
   - [x] TextualHumanAgent が UI 終了後に stop_manager ツールを発火するよう調整し、終了時に画面が崩れないようにした。
   - [x] TextualHumanAgent のチャット／ログパネルで RichLog を優先使用し、長文でも自動的に折り返すよう改善。
-- [ ] LLM 呼び出しを非同期化し、停止イベント受信時に進行中リクエストをキャンセルできる構成を整備する。
-  - [ ] `ChannelManager` / `ChannelTools` を `asyncio` 対応へ拡張し、非同期ポーリングおよび書き込みを安全に扱えるようにする。
-  - [ ] `StandardManager` に `run_async()` を追加し、イベントループ主導でエージェント実行キューと停止シグナルを管理する（`run()` 互換は任意の薄いラッパーとする）。
-  - [ ] `DelegationLLMAgent` を含むエージェントに `run_async()` を実装し、チャネル読み取り・LLM 呼び出し・結果送信を `await` で繋ぎ、停止要求時はタスクキャンセル → 状態保存 → ループ停止を明示的に制御する。
-  - [ ] `LLMCallTool` にキャンセル可能なリクエスト実装（タイムアウト設定やキャンセル用ハンドラ）を追加する。
-  - [ ] 非同期化に伴うログ・履歴・チャネル永続化の排他制御（`asyncio.Lock` 等）の指針をまとめ、ドキュメントへ反映する。
+- [x] LLM 呼び出しを非同期化し、停止イベント受信時に進行中リクエストをキャンセルできる構成を整備する。
+  - [x] `ChannelManager` / `ChannelTools` を `asyncio` 対応へ拡張し、非同期ポーリングおよび書き込みを安全に扱えるようにする。
+  - [x] `StandardManager` に `run_async()` を追加し、イベントループ主導でエージェント実行キューと停止シグナルを管理する（`run()` 互換は任意の薄いラッパーとする）。
+  - [x] `DelegationLLMAgent` を含むエージェントに `run_async()` を実装し、チャネル読み取り・LLM 呼び出し・結果送信を `await` で繋ぎ、停止要求時はタスクキャンセル → 状態保存 → ループ停止を明示的に制御する。
+  - [x] `LLMCallTool` にキャンセル可能なリクエスト実装（タイムアウト設定やキャンセル用ハンドラ）を追加する。
+  - [x] 非同期化に伴うログ・履歴・チャネル永続化の排他制御（`asyncio.Lock` 等）の指針をまとめ、ドキュメントへ反映する。
+  - [x] `shutdown_grace_period` を導入し、キャンセルに応答しない LLM 呼び出しでも終了処理がブロックされないようグレースタイムアウトを追加した。
+  - [x] 擬似 LLM での停止回避ケースを再現するテスト (`tests/samples/test_llm_delegation_shutdown.py`) を追加した。
+  - [x] チャネル経路とは独立した停止シグナル `StopMessage` を導入し、`ChannelTools.read_async` で協調停止を通知できるようにした。
   - [ ] 詳細計画は `docs/features/async_llm_shutdown.md` を参照。
 
 ## Presets

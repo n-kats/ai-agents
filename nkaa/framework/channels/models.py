@@ -98,3 +98,4 @@ class UnreadRecord(BaseModel):
     message_id: int
     priority: int
     enqueued_at: datetime = Field(default_factory=_utcnow)
+

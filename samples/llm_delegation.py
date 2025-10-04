@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import asyncio
 import json
 from collections.abc import Callable
 from contextlib import nullcontext
@@ -22,6 +23,7 @@ from nkaa.framework.agent import (
 )
 from nkaa.framework.channels import ChannelManager, DatabaseChannelConfig, InMemoryChannelRepository
 from nkaa.framework.channels.models import ChannelMetadata
+from nkaa.framework.messages import StopMessage
 from nkaa.framework.logging import AgentLogTool, configure_logging
 from nkaa.framework.tools import ChannelTools
 from nkaa.presets.agents import (
@@ -144,13 +146,29 @@ class DelegationLLMAgent(BaseAgent[DelegationAgentTools]):
         *,
         system_prompt: str,
         model: str,
+        shutdown_grace_period: float = 5.0,
     ) -> None:
         self.agent_id = agent_id
         self.model = model
         self.system_prompt = system_prompt
+        self._shutdown_grace_period = shutdown_grace_period
+        self._loop: asyncio.AbstractEventLoop | None = None
+        self._stop_event: asyncio.Event | None = None
+        self._inflight_tasks: set[asyncio.Task[Any]] = set()
 
-    def stop(self) -> None:  # pragma: no cover
-        return None
+    def stop(self) -> None:
+        loop = self._loop
+        stop_event = self._stop_event
+        if loop is None or stop_event is None:
+            return
+
+        def _propagate_stop() -> None:
+            if not stop_event.is_set():
+                stop_event.set()
+            for task in list(self._inflight_tasks):
+                task.cancel()
+
+        loop.call_soon_threadsafe(_propagate_stop)
 
     def load(self) -> None:  # pragma: no cover
         return None
@@ -159,99 +177,174 @@ class DelegationLLMAgent(BaseAgent[DelegationAgentTools]):
         return None
 
     def run(self, tools: DelegationAgentTools) -> None:
+        asyncio.run(self.run_async(tools))
+
+    async def _await_llm_dispatch(
+        self,
+        task: asyncio.Task[Any],
+        stop_event: asyncio.Event,
+        *,
+        poll_interval: float = 0.1,
+    ) -> StructuredChannelResponse:
+        while True:
+            if stop_event.is_set():
+                task.cancel()
+            try:
+                return await asyncio.wait_for(task, timeout=poll_interval)
+            except asyncio.TimeoutError:
+                if stop_event.is_set():
+                    task.cancel()
+                    raise asyncio.CancelledError
+                await asyncio.sleep(0)
+
+    async def run_async(self, tools: DelegationAgentTools) -> None:
         log_tool = tools.log
         agent_logger = (
             log_tool.logger if log_tool is not None else logger.bind(agent_id=self.agent_id)
         )
-        while True:
-            message = tools.channels.read(block=True)
-            if message is None or message.sender_id == self.agent_id:
-                continue
-            if not isinstance(message.payload, dict):
-                with (log_tool.context(channel_id=message.channel_id) if log_tool else nullcontext()):
-                    agent_logger.warning(
-                        "Skipping non-dict payload from channel {}: {!r}",
-                        message.channel_id,
-                        message.payload,
+        loop = asyncio.get_running_loop()
+        stop_event = asyncio.Event()
+        self._loop = loop
+        self._stop_event = stop_event
+        try:
+            while not stop_event.is_set():
+                try:
+                    incoming = await tools.channels.read_async(
+                        poll_interval=0.5,
+                        stop_event=stop_event,
                     )
-                continue
-            payload = message.payload
-            channel_metadata = tools.joined_channel_metadata()
-            if not channel_metadata:
-                agent_logger.warning("Agent {} is not joined to any channels", self.agent_id)
-                continue
-            incoming = next((meta for meta in channel_metadata if meta.id == message.channel_id), None)
-            if incoming is None:
-                with (log_tool.context(channel_id=message.channel_id) if log_tool else nullcontext()):
-                    agent_logger.debug(
-                        "Skipping message from unexpected channel {}",
-                        message.channel_id,
-                    )
-                continue
-            with (log_tool.context(channel_id=message.channel_id) if log_tool else nullcontext()):
-                agent_logger.info(
-                    "Agent {} received message via {} from {}: {}",
-                    self.agent_id,
-                    _channel_display_name(incoming),
-                    message.sender_id,
-                    _summarize_payload(payload),
-                )
-            available_channels = [
-                {
-                    "channel_name": _channel_display_name(meta),
-                    "channel_description": meta.description or "",
-                }
-                for meta in channel_metadata
-            ]
-            dispatch = invoke_structured_llm(
-                tools.llm,
-                model=self.model,
-                system_prompt=self.system_prompt,
-                payload={
-                    "incoming_channel": {
-                        "channel_id": incoming.id,
-                        "channel_name": _channel_display_name(incoming),
-                        "channel_description": incoming.description or "",
-                    },
-                    "incoming_message": payload,
-                    "available_channels": available_channels,
-                },
-                log=log_tool,
-            )
-            target: str | None = None
-            trimmed = dispatch.output_channel.strip()
-            if trimmed:
-                for meta in channel_metadata:
-                    if _channel_display_name(meta) == trimmed:
-                        target = meta.id
-                        break
-                else:
+                except asyncio.CancelledError:
+                    break
+                if isinstance(incoming, StopMessage):
+                    agent_logger.info("Received stop signal; shutting down agent {}", self.agent_id)
+                    break
+                message = incoming
+                if message is None:
+                    await asyncio.sleep(0)
+                    continue
+                if message.sender_id == self.agent_id:
+                    continue
+                if not isinstance(message.payload, dict):
                     with (log_tool.context(channel_id=message.channel_id) if log_tool else nullcontext()):
                         agent_logger.warning(
-                            "Unknown output channel '{}' from agent {}; falling back",
-                            dispatch.output_channel,
-                            self.agent_id,
+                            "Skipping non-dict payload from channel {}: {!r}",
+                            message.channel_id,
+                            message.payload,
                         )
-            if target is None:
+                    continue
+                payload = message.payload
+                channel_metadata = tools.joined_channel_metadata()
+                if not channel_metadata:
+                    agent_logger.warning("Agent {} is not joined to any channels", self.agent_id)
+                    await asyncio.sleep(0)
+                    continue
+                incoming = next((meta for meta in channel_metadata if meta.id == message.channel_id), None)
+                if incoming is None:
+                    with (log_tool.context(channel_id=message.channel_id) if log_tool else nullcontext()):
+                        agent_logger.debug(
+                            "Skipping message from unexpected channel {}",
+                            message.channel_id,
+                        )
+                    continue
                 with (log_tool.context(channel_id=message.channel_id) if log_tool else nullcontext()):
-                    agent_logger.warning(
-                        "No output channel resolved; returning to source {}",
-                        message.channel_id,
+                    agent_logger.info(
+                        "Agent {} received message via {} from {}: {}",
+                        self.agent_id,
+                        _channel_display_name(incoming),
+                        message.sender_id,
+                        _summarize_payload(payload),
                     )
-                target = message.channel_id
-            outgoing = dispatch.message.model_dump()
-            tools.channels.send(target, outgoing)
-            target_meta = next((meta for meta in channel_metadata if meta.id == target), None)
-            target_label = _channel_display_name(target_meta) if target_meta else target
-            with (log_tool.context(channel_id=target) if log_tool else nullcontext()):
-                agent_logger.info(
-                    "Sent message to {} with role={}",
-                    target_label,
-                    outgoing.get("role"),
+                available_channels = [
+                    {
+                        "channel_name": _channel_display_name(meta),
+                        "channel_description": meta.description or "",
+                    }
+                    for meta in channel_metadata
+                ]
+                llm_task = asyncio.create_task(
+                    invoke_structured_llm(
+                        tools.llm,
+                        model=self.model,
+                        system_prompt=self.system_prompt,
+                        payload={
+                            "incoming_channel": {
+                                "channel_id": incoming.id,
+                                "channel_name": _channel_display_name(incoming),
+                                "channel_description": incoming.description or "",
+                            },
+                            "incoming_message": payload,
+                            "available_channels": available_channels,
+                        },
+                        log=log_tool,
+                    ),
+                    name=f"llm-call-{self.agent_id}",
                 )
+                self._inflight_tasks.add(llm_task)
+                try:
+                    dispatch = await self._await_llm_dispatch(llm_task, stop_event)
+                except asyncio.CancelledError:
+                    break
+                finally:
+                    self._inflight_tasks.discard(llm_task)
+                if stop_event.is_set():
+                    break
+                target: str | None = None
+                trimmed = dispatch.output_channel.strip()
+                if trimmed:
+                    for meta in channel_metadata:
+                        if _channel_display_name(meta) == trimmed:
+                            target = meta.id
+                            break
+                    else:
+                        with (log_tool.context(channel_id=message.channel_id) if log_tool else nullcontext()):
+                            agent_logger.warning(
+                                "Unknown output channel '{}' from agent {}; falling back",
+                                dispatch.output_channel,
+                                self.agent_id,
+                            )
+                if target is None:
+                    with (log_tool.context(channel_id=message.channel_id) if log_tool else nullcontext()):
+                        agent_logger.warning(
+                            "No output channel resolved; returning to source {}",
+                            message.channel_id,
+                        )
+                    target = message.channel_id
+                outgoing = dispatch.message.model_dump()
+                await tools.channels.send_async(target, outgoing)
+                target_meta = next((meta for meta in channel_metadata if meta.id == target), None)
+                target_label = _channel_display_name(target_meta) if target_meta else target
+                with (log_tool.context(channel_id=target) if log_tool else nullcontext()):
+                    agent_logger.info(
+                        "Sent message to {} with role={}",
+                        target_label,
+                        outgoing.get("role"),
+                    )
+        finally:
+            pending = tuple(self._inflight_tasks)
+            self._inflight_tasks.clear()
+            if pending:
+                for task in pending:
+                    task.cancel()
+                if self._shutdown_grace_period > 0:
+                    try:
+                        await asyncio.wait_for(
+                            asyncio.gather(*pending, return_exceptions=True),
+                            timeout=self._shutdown_grace_period,
+                        )
+                    except asyncio.TimeoutError:
+                        with (log_tool.context() if log_tool else nullcontext()):
+                            agent_logger.warning(
+                                "Timed out waiting for %d inflight LLM task(s) to finish; forcing shutdown",
+                                len(pending),
+                            )
+                for task in pending:
+                    if not task.done():
+                        task.cancel()
+            self._loop = None
+            self._stop_event = None
 
 
-def invoke_structured_llm(
+async def invoke_structured_llm(
     llm: LLMCallTool,
     *,
     model: str,
@@ -270,20 +363,26 @@ def invoke_structured_llm(
     else:
         channel_name = "n/a"
         channel_id = None
-    log_context = log.context(channel_id=channel_id) if log else nullcontext()
+    def _context() -> Any:
+        return log.context(channel_id=channel_id) if log else nullcontext()
+
     bound_logger = log.logger if log else logger
-    with log_context:
+    with _context():
         bound_logger.info("LLM call channel={} model={}", channel_name, model)
     try:
-        return llm.call_parsed(
+        return await llm.call_parsed_async(
             messages,
             parse_model=StructuredChannelResponse,
             model_name=model,
         )
+    except asyncio.CancelledError:
+        with _context():
+            bound_logger.warning("LLM call cancelled. channel={} model={}", channel_name, model)
+        raise
     except Exception:
         prompt_dump = json.dumps(messages, ensure_ascii=False, indent=2)
         payload_dump = json.dumps(payload, ensure_ascii=False, indent=2)
-        with log_context:
+        with _context():
             bound_logger.error(
                 "LLM call failed. system_prompt={}\nmessages={}\npayload={}",
                 system_prompt,
@@ -316,12 +415,14 @@ class DelegationLLMAgentConfig(AgentConfig):
     type: Literal["delegation_llm"] = "delegation_llm"
     system_prompt: str
     model: str = Field("gpt-5-mini")
+    shutdown_grace_period: float = Field(5.0, ge=0.0)
 
     def build(self) -> DelegationLLMAgent:
         return DelegationLLMAgent(
             agent_id=self.id,
             model=self.model,
             system_prompt=self.system_prompt,
+            shutdown_grace_period=self.shutdown_grace_period,
         )
 
 

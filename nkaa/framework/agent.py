@@ -1,3 +1,5 @@
+import asyncio
+import inspect
 import json
 import multiprocessing
 import threading
@@ -150,6 +152,17 @@ class _WorkerHandle(Protocol):
         ...
 
 
+def _run_agent_worker(agent: "BaseAgent[Any]", tools: BaseTools) -> None:
+    """エージェントが提供する非同期エントリーポイントを優先して実行する。"""
+
+    run_async = getattr(agent, "run_async", None)
+    if run_async is not None and inspect.iscoroutinefunction(run_async):
+        coroutine = run_async(tools)  # type: ignore[misc]
+        asyncio.run(coroutine)
+        return
+    agent.run(tools)
+
+
 class ManagerExecutionBackend(Protocol):
     def create_event(self) -> _StopEvent:
         """停止制御用イベントを生成する。"""
@@ -273,27 +286,41 @@ class StandardManager(BaseManager, Generic[TManagerConfig, TManagerTools, TTools
         return self.adapter(agent, self.tools)
 
     def run(self) -> None:
-        """
-        標準マネージャーのメインロジックを実行するメソッド。
-        """
+        asyncio.run(self.run_async())
+
+    async def run_async(self) -> None:
+        """標準マネージャーを非同期コンテキストで実行する。"""
+
         assert self.agent_processes == [], "Manager is already running."
+        agent_contexts: list[tuple[BaseAgent[TTools], TTools]] = [
+            (agent, self.apply_adapter(agent))
+            for agent in self.agents
+        ]
+
         self.agent_processes = [
             self.execution_backend.create_worker(
-                target=agent.run,
-                args=(self.apply_adapter(agent),),
+                target=_run_agent_worker,
+                args=(agent, tools),
             )
-            for agent in self.agents
+            for agent, tools in agent_contexts
         ]
         for process in self.agent_processes:
             print(f"Starting agent process: {process}")
             process.start()
 
-        self.stop_event.wait()
-        self.tools.stop()
-        for agent in self.agents:
-            agent.stop()
+        try:
+            await asyncio.to_thread(self.stop_event.wait)
+        finally:
+            await asyncio.to_thread(self.tools.stop)
+            for agent in self.agents:
+                agent.stop()
 
-        self.save()
+            await asyncio.gather(
+                *(asyncio.to_thread(process.join) for process in self.agent_processes),
+                return_exceptions=True,
+            )
+            await asyncio.to_thread(self.save)
+            self.agent_processes = []
 
     def save(self) -> None:
         """

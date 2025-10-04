@@ -4,7 +4,7 @@
 - エージェント実装は `DelegationLLMAgent` 1 クラスに集約し、`role` 引数で受付／思考を切り替える。
 - `DelegationLLMAgentConfig` も 1 種類に統一し、JSON 設定ファイルは `role` を指定するだけにする。
 - チャンネル初期化はサンプル前提（人間 1・受付 1・思考 1）に合わせ、`configure_delegation_channels` で固定の2チャネルを作成。汎用的な探索・キャッシュ処理は持たない。
-- LLM 呼び出しは `invoke_structured_llm` 経由で行い、受付／思考ごとに固定のシステムプロンプトと構造化レスポンスを利用する。
+- LLM 呼び出しは `await invoke_structured_llm(...)` で行い、受付／思考ごとに固定のシステムプロンプトと構造化レスポンスを利用する。`asyncio.CancelledError` を伝播する設計にし、停止要求時に未完了コールを安全に中断できる。
 - チャンネルへ送るメッセージは `with_defaults` により必須フィールドだけを最小限で補完し、過剰なアウトライン整形・要約加工はサンプル外で扱わない。
 
 ## 過去構成の課題
