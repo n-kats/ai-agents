@@ -25,7 +25,8 @@ from nkaa.framework.channels import (
     DatabaseChannelConfig,
     InMemoryChannelRepository,
 )
-from nkaa.framework.channels.models import ChannelMetadata, UnreadRecord
+from nkaa.framework.channels.models import UnreadRecord
+from nkaa.framework.logging import AgentLogTool, configure_logging
 from nkaa.framework.tools import ChannelTools
 
 # ---------------------------------------------------------------------------
@@ -48,6 +49,7 @@ class DemoManagerTools(BaseTools):
 @dataclass
 class DemoAgentTools(BaseTools):
     channels: ChannelTools
+    log: AgentLogTool
     stop_manager: Callable[[], None] | None = None
 
     def stop(self) -> None:
@@ -59,7 +61,12 @@ class DemoAgentTools(BaseTools):
 
 def demo_adapter(agent: BaseAgent[DemoAgentTools], manager_tools: DemoManagerTools) -> DemoAgentTools:
     channel_tools = ChannelTools(agent_id=agent.agent_id, manager=manager_tools.channel_manager)
-    return DemoAgentTools(channels=channel_tools, stop_manager=manager_tools.stop_manager)
+    log_tool = AgentLogTool(agent_id=agent.agent_id)
+    return DemoAgentTools(
+        channels=channel_tools,
+        log=log_tool,
+        stop_manager=manager_tools.stop_manager,
+    )
 
 
 # ---------------------------------------------------------------------------
@@ -113,12 +120,16 @@ class AlertPublisher(BaseDemoAgent):
             self.channel_id = self._ensure_channel(tools)
 
         tools.channels.join(self.channel_id)
-        for payload in self.payloads:
-            stored = tools.channels.send(self.channel_id, payload)
-            print(
-                f"[Publisher:{self.agent_id}] sent #{stored.message_id}: {stored.payload}",
-                flush=True,
-            )
+        log = tools.log.logger
+        channel_id = self.channel_id
+        with tools.log.context(channel_id=channel_id):
+            for payload in self.payloads:
+                stored = tools.channels.send(channel_id, payload)
+                log.info(
+                    "sent message",
+                    message_id=stored.message_id,
+                    payload=stored.payload,
+                )
 
     def _ensure_channel(self, tools: DemoAgentTools) -> str:
         descriptor = self.channel_descriptor
@@ -129,15 +140,13 @@ class AlertPublisher(BaseDemoAgent):
             channel = tools.channels.manager.create(descriptor.to_config())
             channel_id = channel.id
             metadata = channel.metadata
-            self._print_channel_created(metadata)
+            tools.log.logger.info(
+                "created channel",
+                channel_id=metadata.id,
+                name=metadata.name,
+                attributes=metadata.attributes,
+            )
         return channel_id
-
-    def _print_channel_created(self, metadata: ChannelMetadata) -> None:
-        print(
-            f"[Publisher:{self.agent_id}] created channel {metadata.id}"
-            f" (name={metadata.name}, attributes={metadata.attributes})",
-            flush=True,
-        )
 
 
 class AlertSubscriber(BaseDemoAgent):
@@ -158,10 +167,11 @@ class AlertSubscriber(BaseDemoAgent):
         self.max_idle_cycles = max_idle_cycles
 
     def run(self, tools: DemoAgentTools) -> None:
+        log = tools.log.logger
         if not self.joined:
             joined = tools.channels.join_matching(self.query)
             if joined:
-                print(f"[Subscriber] joined channels: {joined}", flush=True)
+                log.info("joined channels", joined=joined)
                 self.joined = True
 
         idle_cycles = 0
@@ -171,12 +181,17 @@ class AlertSubscriber(BaseDemoAgent):
                 idle_cycles += 1
                 newly_joined = tools.channels.join_matching(self.query)
                 if newly_joined:
-                    print(f"[Subscriber] joined channels: {newly_joined}", flush=True)
+                    log.info("joined channels", joined=newly_joined)
                     self.joined = True
                 continue
 
             idle_cycles = 0
-            print(f"[Subscriber] received #{message.message_id}: {message.payload}", flush=True)
+            with tools.log.context(channel_id=message.channel_id):
+                log.info(
+                    "received message",
+                    message_id=message.message_id,
+                    payload=message.payload,
+                )
 
 
 class SnapshotObserver(BaseDemoAgent):
@@ -198,27 +213,27 @@ class SnapshotObserver(BaseDemoAgent):
             time.sleep(self.wait_before_snapshot)
         manager = tools.channels.manager
         records = manager.snapshot_unread_records(self.target_agent_id)
-        self._print_records(records)
+        with tools.log.context(target_agent=self.target_agent_id):
+            self._log_records(tools, records)
 
         manager.repository.replace_unread_records(records)
 
         restored_manager = ChannelManager(manager.repository)
         restored_message = restored_manager.read_for_agent(self.target_agent_id)
-        print(f"[Observer] restored message: {restored_message}", flush=True)
+        tools.log.logger.info("restored message", message=restored_message)
 
         if callable(tools.stop_manager):
             tools.stop_manager()
 
-    def _print_records(self, records: list[UnreadRecord]) -> None:
-        print(f"[Observer] unread snapshot count: {len(records)}", flush=True)
+    def _log_records(self, tools: DemoAgentTools, records: list[UnreadRecord]) -> None:
+        tools.log.logger.info("snapshot captured", count=len(records))
         for record in records:
-            print(
-                "  ->",
-                record.agent_id,
-                record.channel_id,
-                record.message_id,
-                record.priority,
-                flush=True,
+            tools.log.logger.debug(
+                "snapshot record",
+                agent_id=record.agent_id,
+                channel_id=record.channel_id,
+                message_id=record.message_id,
+                priority=record.priority,
             )
 
 
@@ -284,9 +299,7 @@ class DemoManagerConfig(StandardManagerConfig):
             raise ValueError(f"Unknown agent type: {type_name}") from exc
 
     def build_tools(self) -> DemoManagerTools:
-        return DemoManagerTools(
-            channel_manager=ChannelManager(InMemoryChannelRepository())
-        )
+        return DemoManagerTools(channel_manager=ChannelManager(InMemoryChannelRepository()))
 
 
 # ---------------------------------------------------------------------------
@@ -369,6 +382,9 @@ def prepare_configs(base_dir: Path) -> None:
 
 
 def run_demo() -> None:
+    state = configure_logging(enable_console=True, buffer_limit=200)
+    manager_logger = AgentLogTool(agent_id="manager").logger
+    manager_logger.info("logging configured", state=state)
     config_dir = Path("_tmp/samples/standard_manager")
     prepare_configs(config_dir)
 

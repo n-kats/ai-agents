@@ -16,6 +16,7 @@
   - [x] `ChannelSearchQuery`・`ChannelManager.search_channels`・`ChannelTools.search`/`join_matching` を追加し、メタデータ条件での検索と自動参加をサポート。
 - [ ] メッセージペイロードのバージョニング/検証ルールと後方互換性戦略の策定。
 - [ ] `ChannelManager.snapshot_unread_records()` を活用した未読スナップショット運用ポリシーとクラッシュ復旧手順の整備（暫定的に `ChannelTools.save()` で担当エージェント分を永続化）。
+- [x] loguru ベースのログ基盤を整備（`configure_logging`・`LogBufferSink`・`LogStream`・`AgentLogTool`・`LogPanelAdapter`）。
 
 ## Tool Injection / Adapter
 - [x] アダプター経由でツールをエージェントへ渡す設計が成立 (`nkaa/framework/agent.py:120`).
@@ -24,6 +25,15 @@
 - [ ] CLI / GUI など人間インタラクション専用のツールセットとエージェント定義は未実装（`HumanInteractionAgent` の設計とプリセット追加が必要）。
   - [x] Textual ベースの人間エージェントを追加し、対話 UI を拡張可能なプリセットを用意 (`nkaa/presets/agents/textual_human.py`).
   - [x] TextualHumanAgent がメインスレッド以外で実行されてもシグナル登録エラーで停止しないよう改善。
+  - [x] TextualHumanAgent に LogPanelAdapter を組み込み、タブ切り替えでチャット／ログを表示し、レベル・エージェント・チャネルで絞り込めるよう整備。
+  - [x] TextualHumanAgent が UI 終了後に stop_manager ツールを発火するよう調整し、終了時に画面が崩れないようにした。
+  - [x] TextualHumanAgent のチャット／ログパネルで RichLog を優先使用し、長文でも自動的に折り返すよう改善。
+- [ ] LLM 呼び出しを非同期化し、停止イベント受信時に進行中リクエストをキャンセルできる構成を整備する。
+  - [ ] `ChannelManager` / `ChannelTools` を `asyncio` 対応へ拡張し、非同期ポーリングおよび書き込みを安全に扱えるようにする。
+  - [ ] `DelegationLLMAgent` を `asyncio` ループ上で動作させ、`stop()` 時にタスクキャンセル → 状態保存 → ループ終了までを明示的に制御する。
+  - [ ] `LLMCallTool` にキャンセル可能なリクエスト実装（タイムアウト設定やキャンセル用ハンドラ）を追加する。
+  - [ ] 非同期化に伴うログ・履歴・チャネル永続化の排他制御（`asyncio.Lock` 等）の指針をまとめ、ドキュメントへ反映する。
+  - [ ] 詳細計画は `docs/features/async_llm_shutdown.md` を参照。
 
 ## Presets
 - [x] シングルエージェント向けプリセットとツール束ねの例が存在 (`nkaa/presets/managers/single_agent_model.py`).

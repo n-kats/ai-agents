@@ -3,11 +3,13 @@
 from __future__ import annotations
 
 import json
-import logging
+from collections.abc import Callable
+from contextlib import nullcontext
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Any, Iterable, Literal, Type, cast
 
+from loguru import logger
 from pydantic import BaseModel, ConfigDict, Field
 
 from nkaa.framework.agent import (
@@ -20,9 +22,9 @@ from nkaa.framework.agent import (
 )
 from nkaa.framework.channels import ChannelManager, DatabaseChannelConfig, InMemoryChannelRepository
 from nkaa.framework.channels.models import ChannelMetadata
+from nkaa.framework.logging import AgentLogTool, configure_logging
 from nkaa.framework.tools import ChannelTools
 from nkaa.presets.agents import (
-    StdIOHumanAgent,
     StdIOHumanAgentConfig,
     StdIOHumanAgentTools,
     TextualHumanAgent,
@@ -30,9 +32,6 @@ from nkaa.presets.agents import (
     TextualHumanAgentTools,
 )
 from nkaa.presets.tools import LLMCallTool
-
-
-logger = logging.getLogger(__name__)
 
 ANALYSIS_CHANNEL_NAME = "analysis_workspace"
 HUMAN_CHANNEL_NAME = "human_support"
@@ -42,14 +41,18 @@ HUMAN_CHANNEL_DESCRIPTION = "人間ユーザーとの対話を行う窓口チャ
 FRONT_DESK_SYSTEM_PROMPT = (
     "あなたは受付エージェントです。"
     "user メッセージには incoming_channel と incoming_message が含まれています。"
-    "incoming_channel.channel_name が 'human_support' のときは、依頼内容を整理したアウトラインを作り"
+    "incoming_channel.channel_name が 'human_support' のときは、"
+    "依頼内容を整理したアウトラインを作り"
     "analysis_workspace に送るための analysis_request メッセージを構築してください。"
-    "incoming_channel.channel_name が 'analysis_workspace' で incoming_message.role が 'analysis_summary' のときは、"
+    "incoming_channel.channel_name が 'analysis_workspace' で "
+    "incoming_message.role が 'analysis_summary' のときは、"
     "要約をそのまま human_support へ届けるためのメッセージを作成してください。"
     "その他のケースでは出力せず無視します。"
-    "message には必ず role（例: analysis_request）と content（要約本文）を含め、必要なら request_id を文字列で設定してください。"
+    "message には必ず role（例: analysis_request）と content（要約本文）を含め、"
+    "必要なら request_id を文字列で設定してください。"
     "Responses API の structured_output 機能で `StructuredChannelResponse` スキーマ（"
-    "output_channel: str, message: {role: str, content: str, request_id: Optional[str], metadata: Optional[dict[str, str]]}）"
+    "output_channel: str, message: {role: str, content: str, "
+    "request_id: Optional[str], metadata: Optional[dict[str, str]]}）"
     "が適用されています。"
     "構造化スキーマに適合するデータのみを返し、周囲に説明やコードブロック、余計な文字列を絶対に付与しないでください。"
     "output_channel には available_channels.channel_name のいずれかを正確に指定し、"
@@ -58,10 +61,12 @@ FRONT_DESK_SYSTEM_PROMPT = (
 
 THINKING_SYSTEM_PROMPT = (
     "あなたは分析担当です。"
-    "incoming_channel.channel_name が 'analysis_workspace' で incoming_message.role が 'analysis_request' のときだけ対応し、"
+    "incoming_channel.channel_name が 'analysis_workspace' で "
+    "incoming_message.role が 'analysis_request' のときだけ対応し、"
     "human_support の依頼内容とアウトラインを読み取って分析サマリー・結論・推奨アクションをまとめてください。"
     "結果は analysis_workspace に投稿し、role は 'analysis_summary' に設定してください。"
-    "message には role と content（分析結果テキスト）を必ず含め、必要に応じて request_id を文字列で設定してください。"
+    "message には role と content（分析結果テキスト）を必ず含め、"
+    "必要に応じて request_id を文字列で設定してください。"
     "該当しないメッセージは無視します。"
     "Responses API の structured_output 機能で `StructuredChannelResponse` スキーマが適用されています。"
     "構造化スキーマに合致する出力のみを返し、余計なテキストは一切付けないでください。"
@@ -76,11 +81,7 @@ def _channel_display_name(metadata: ChannelMetadata) -> str:
 
 def _summarize_payload(payload: Any, *, limit: int = 160) -> str:
     try:
-        text = (
-            json.dumps(payload, ensure_ascii=False)
-            if isinstance(payload, (dict, list))
-            else str(payload)
-        )
+        text = json.dumps(payload, ensure_ascii=False) if isinstance(payload, (dict, list)) else str(payload)
     except Exception:  # pragma: no cover - 予期せぬシリアライズ失敗時
         text = repr(payload)
     if len(text) <= limit:
@@ -108,6 +109,7 @@ class StructuredChannelResponse(BaseModel):
 class DelegationManagerTools(BaseTools):
     channel_manager: ChannelManager
     llm: LLMCallTool
+    stop_manager: Callable[[], None] | None = None
 
     def stop(self) -> None:
         self.llm.stop()
@@ -120,6 +122,8 @@ class DelegationManagerTools(BaseTools):
 class DelegationAgentTools(BaseTools):
     channels: ChannelTools
     llm: LLMCallTool
+    log: AgentLogTool
+    stop_manager: Callable[[], None] | None = None
 
     def stop(self) -> None:
         self.channels.stop()
@@ -155,33 +159,43 @@ class DelegationLLMAgent(BaseAgent[DelegationAgentTools]):
         return None
 
     def run(self, tools: DelegationAgentTools) -> None:
+        log_tool = tools.log
+        agent_logger = (
+            log_tool.logger if log_tool is not None else logger.bind(agent_id=self.agent_id)
+        )
         while True:
             message = tools.channels.read(block=True)
             if message is None or message.sender_id == self.agent_id:
                 continue
             if not isinstance(message.payload, dict):
-                logger.warning(
-                    "Skipping non-dict payload from channel %s: %r",
-                    message.channel_id,
-                    message.payload,
-                )
+                with (log_tool.context(channel_id=message.channel_id) if log_tool else nullcontext()):
+                    agent_logger.warning(
+                        "Skipping non-dict payload from channel {}: {!r}",
+                        message.channel_id,
+                        message.payload,
+                    )
                 continue
             payload = message.payload
             channel_metadata = tools.joined_channel_metadata()
             if not channel_metadata:
-                logger.warning("Agent %s is not joined to any channels", self.agent_id)
+                agent_logger.warning("Agent {} is not joined to any channels", self.agent_id)
                 continue
             incoming = next((meta for meta in channel_metadata if meta.id == message.channel_id), None)
             if incoming is None:
-                logger.debug("Skipping message from unexpected channel %s", message.channel_id)
+                with (log_tool.context(channel_id=message.channel_id) if log_tool else nullcontext()):
+                    agent_logger.debug(
+                        "Skipping message from unexpected channel {}",
+                        message.channel_id,
+                    )
                 continue
-            logger.info(
-                "Agent %s received message via %s from %s: %s",
-                self.agent_id,
-                _channel_display_name(incoming),
-                message.sender_id,
-                _summarize_payload(payload),
-            )
+            with (log_tool.context(channel_id=message.channel_id) if log_tool else nullcontext()):
+                agent_logger.info(
+                    "Agent {} received message via {} from {}: {}",
+                    self.agent_id,
+                    _channel_display_name(incoming),
+                    message.sender_id,
+                    _summarize_payload(payload),
+                )
             available_channels = [
                 {
                     "channel_name": _channel_display_name(meta),
@@ -202,6 +216,7 @@ class DelegationLLMAgent(BaseAgent[DelegationAgentTools]):
                     "incoming_message": payload,
                     "available_channels": available_channels,
                 },
+                log=log_tool,
             )
             target: str | None = None
             trimmed = dispatch.output_channel.strip()
@@ -211,18 +226,29 @@ class DelegationLLMAgent(BaseAgent[DelegationAgentTools]):
                         target = meta.id
                         break
                 else:
-                    logger.warning(
-                        "Unknown output channel '%s' from agent %s; falling back",
-                        dispatch.output_channel,
-                        self.agent_id,
-                    )
+                    with (log_tool.context(channel_id=message.channel_id) if log_tool else nullcontext()):
+                        agent_logger.warning(
+                            "Unknown output channel '{}' from agent {}; falling back",
+                            dispatch.output_channel,
+                            self.agent_id,
+                        )
             if target is None:
-                logger.warning(
-                    "No output channel resolved; returning to source %s",
-                    message.channel_id,
-                )
+                with (log_tool.context(channel_id=message.channel_id) if log_tool else nullcontext()):
+                    agent_logger.warning(
+                        "No output channel resolved; returning to source {}",
+                        message.channel_id,
+                    )
                 target = message.channel_id
-            tools.channels.send(target, dispatch.message.model_dump())
+            outgoing = dispatch.message.model_dump()
+            tools.channels.send(target, outgoing)
+            target_meta = next((meta for meta in channel_metadata if meta.id == target), None)
+            target_label = _channel_display_name(target_meta) if target_meta else target
+            with (log_tool.context(channel_id=target) if log_tool else nullcontext()):
+                agent_logger.info(
+                    "Sent message to {} with role={}",
+                    target_label,
+                    outgoing.get("role"),
+                )
 
 
 def invoke_structured_llm(
@@ -231,38 +257,58 @@ def invoke_structured_llm(
     model: str,
     system_prompt: str,
     payload: dict[str, Any],
+    log: AgentLogTool | None = None,
 ) -> StructuredChannelResponse:
     messages = [
         {"role": "system", "content": system_prompt},
         {"role": "user", "content": json.dumps(payload, ensure_ascii=False)},
     ]
     incoming = payload.get("incoming_channel", {})
-    channel_name = incoming.get("channel_name") if isinstance(incoming, dict) else "n/a"
-    logger.info("LLM call channel=%s model=%s", channel_name, model)
+    if isinstance(incoming, dict):
+        channel_name = incoming.get("channel_name", "n/a")
+        channel_id = incoming.get("channel_id")
+    else:
+        channel_name = "n/a"
+        channel_id = None
+    log_context = log.context(channel_id=channel_id) if log else nullcontext()
+    bound_logger = log.logger if log else logger
+    with log_context:
+        bound_logger.info("LLM call channel={} model={}", channel_name, model)
     try:
         return llm.call_parsed(
             messages,
             parse_model=StructuredChannelResponse,
             model_name=model,
         )
-    except Exception as exc:
+    except Exception:
         prompt_dump = json.dumps(messages, ensure_ascii=False, indent=2)
         payload_dump = json.dumps(payload, ensure_ascii=False, indent=2)
-        logger.error(
-            "LLM call failed. system_prompt=%s\nmessages=%s\npayload=%s",
-            system_prompt,
-            prompt_dump,
-            payload_dump,
-        )
+        with log_context:
+            bound_logger.error(
+                "LLM call failed. system_prompt={}\nmessages={}\npayload={}",
+                system_prompt,
+                prompt_dump,
+                payload_dump,
+            )
         raise
 
 
 def delegation_adapter(agent: BaseAgent[Any], manager_tools: DelegationManagerTools) -> BaseTools:
     base_channel_tools = ChannelTools(agent_id=agent.agent_id, manager=manager_tools.channel_manager)
+    log_tool = AgentLogTool(agent_id=agent.agent_id)
     if isinstance(agent, DelegationLLMAgent):
-        return DelegationAgentTools(channels=base_channel_tools, llm=manager_tools.llm)
+        return DelegationAgentTools(
+            channels=base_channel_tools,
+            llm=manager_tools.llm,
+            log=log_tool,
+            stop_manager=manager_tools.stop_manager,
+        )
     if isinstance(agent, TextualHumanAgent):
-        return TextualHumanAgentTools(channels=base_channel_tools)
+        return TextualHumanAgentTools(
+            channels=base_channel_tools,
+            log=log_tool,
+            stop_manager=manager_tools.stop_manager,
+        )
     return StdIOHumanAgentTools(channels=base_channel_tools)
 
 
@@ -384,7 +430,9 @@ def prepare_configs(base_dir: Path) -> None:
 
 
 def run_demo() -> None:
-    logging.basicConfig(level=logging.INFO, format="[%(levelname)s] %(message)s")
+    # Textual CUI でログを確認する前提のため、コンソールシンクは無効化
+    configure_logging(buffer_limit=500)
+    logger.info("Starting delegation demo setup")
     config_dir = Path("_tmp/samples/llm_delegation")
     prepare_configs(config_dir)
     manager = StandardManager.initialize_or_load(
@@ -393,6 +441,8 @@ def run_demo() -> None:
         adapter=delegation_adapter,
         execution_backend=ThreadingManagerExecutionBackend(),
     )
+    tools = cast(DelegationManagerTools, manager.tools)
+    tools.stop_manager = manager.create_stop_event_tool()
     configure_delegation_channels(manager)
     manager.run()
 

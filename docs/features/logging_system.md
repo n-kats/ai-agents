@@ -12,7 +12,7 @@
 ## 初期化 API
 
 ```python
-from nkaa.logging import configure_logging
+from nkaa.framework.logging import configure_logging
 
 configure_logging(
     enable_console: bool = False,
@@ -42,7 +42,7 @@ configure_logging(
 ## LogBufferSink と LogStream
 
 - `LogBufferSink` は loguru シンクとして登録され、構造化ログ (`timestamp`, `level`, `message`, `context`) をリングバッファに保持する。
-- `LogBufferSink.get_stream()` で購読用の `LogStream` を取得できる。`LogStream` は以下のメソッドを持つ:
+- `nkaa.framework.logging.get_log_stream()` で購読用の `LogStream` を取得できる。`LogStream` は以下のメソッドを持つ:
   - `snapshot(limit: int | None = None) -> list[LogRecord]`
   - `subscribe(callback: Callable[[LogRecordEvent], None]) -> Subscription`
   - `set_filters(level: str | None = None, **context_filters) -> None`
@@ -58,14 +58,17 @@ configure_logging(
   - `adapter.set_level("WARNING")` や `adapter.set_filters(agent_id="planner")` で表示対象をランタイム制御。
 - `push(record)` は購読コールバックから呼ばれ、Textual のスレッド安全性を考慮して `app.call_from_thread` 経由でウィジェットを更新する。
 - スナップショット表示（初期描画・再読込）と追随表示の両方に対応し、CUI 上でのログ監視を簡潔に実装できる。
+- TextualHumanAgent の UI に組み込まれており、チャットとログをタブで切り替えて確認できる。ログタブではレベル／エージェント／チャネルでフィルタを変更できる。
+- AgentLogTool が未注入の場合でも UI に案内を表示し、既存の挙動を維持するようフォールバックする。
+- Textual ベースのサンプルでは `configure_logging(buffer_limit=...)` を用い、コンソールシンクを無効化した状態で LogPanelAdapter 側の表示に集約している。
 
 ## AgentLogTool（エージェントへの注入）
 
 - `StandardManagerConfig.build_tools()` で生成されるツールセットに含める。各エージェントには `AgentLogTool` が渡され、以下の API を提供する。
   - `tools.log.logger` : `logger.bind(agent_id=...)` 済みの loguru ロガー。`logger.info(...)` など直接利用できる。
-- `tools.log.context(**metadata)` : `contextmanager`。ブロック内のログへ追加メタデータを付与。
-- `tools.log.get_stream()` : 当該エージェントにフィルタ済みの `LogStream` を返す。Textual UI が個別エージェントのログを購読する際に使用。
-- `tools.log.get_logging_state()` : 現在のログ設定を参照し、エージェント固有の視点から確認できるようにする（内部でグローバルヘルパーを呼ぶ）。
+  - `tools.log.context(**metadata)` : `contextmanager`。ブロック内のログへ追加メタデータを付与。
+  - `tools.log.get_stream(include_agent_context: bool = True, **filters)` : 当該エージェントにフィルタ済みの `LogStream` を返す。`include_agent_context=False` を指定するとエージェント ID での自動フィルタを外し、CUI から他エージェントのログも閲覧できる。
+  - `tools.log.get_logging_state()` : 現在のログ設定を参照し、エージェント固有の視点から確認できるようにする（内部でグローバルヘルパーを呼ぶ）。
 - 例:
   ```python
   tools.log.logger.info("agent started")
@@ -83,6 +86,4 @@ configure_logging(
 ## 今後のタスク
 
 - `LogStream` / `LogRecord` の型定義を整備し、pytest でリングバッファ購読のテストを追加する。
-- TextualHumanAgent へ `LogPanelAdapter` を正式に組み込み、ログパネルの差し替えインターフェースを提供する。
-- `docs/implementation_status.md` にログ基盤実装タスクの進捗を反映する。
 - `get_logging_state()` の仕様とテストを整備し、開発者が動的に状態を確認できる仕組みを提供する。
