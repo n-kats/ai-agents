@@ -3,12 +3,18 @@
 from __future__ import annotations
 
 from collections import defaultdict
-from typing import Iterable, Mapping
+from typing import Iterable, Mapping, Protocol, Sequence
 
 from .channel import BaseChannel, ChannelConfig, DatabaseChannel
-from .models import ChannelMembership, ChannelMessage, ChannelMetadata, ChannelSearchQuery, UnreadRecord
-from .queue import AgentMessagePointer, MessageQueue
-from .repository import ChannelRepository, ChannelRepositoryError
+from .models import ChannelMembership, ChannelMetadata, ChannelSearchQuery
+from .repository import ChannelRepository
+
+
+class UnreadQueueHandler(Protocol):
+    """離脱時に未読ポインタを破棄するためのハンドラ抽象。"""
+
+    def discard_agent_channels(self, agent_id: str, channel_ids: Iterable[str]) -> None:
+        ...
 
 
 class ChannelManager:
@@ -18,12 +24,12 @@ class ChannelManager:
         self.repository = repository
         self.channels: dict[str, BaseChannel] = {}
         self._memberships: dict[str, set[str]] = defaultdict(set)
-        self._agent_queues: dict[str, MessageQueue] = {}
+        self._known_agents: set[str] = set()
+        self._unread_handler: UnreadQueueHandler | None = None
         self._next_index = 1
 
         self._restore_channels()
         self._restore_memberships()
-        self._restore_unread()
 
     # ------------------------------------------------------------------
     # Channel lifecycle
@@ -82,31 +88,11 @@ class ChannelManager:
                     break
         return results
 
-    def snapshot_unread_records(self, agent_id: str | None = None) -> list[UnreadRecord]:
-        """未読キューのスナップショットを取得する（エージェントを限定することも可能）。"""
-
-        records: list[UnreadRecord] = []
-        targets = {agent_id} if agent_id is not None else None
-        for current_agent, queue in self._agent_queues.items():
-            if targets is not None and current_agent not in targets:
-                continue
-            for pointer in queue.snapshot():
-                records.append(
-                    UnreadRecord(
-                        agent_id=current_agent,
-                        channel_id=pointer.channel_id,
-                        message_id=pointer.message_id,
-                        priority=pointer.priority,
-                        enqueued_at=pointer.enqueued_at,
-                    )
-                )
-        return records
-
     # ------------------------------------------------------------------
     # Membership management
     # ------------------------------------------------------------------
     def ensure_agent_registered(self, agent_id: str) -> None:
-        self._agent_queues.setdefault(agent_id, MessageQueue())
+        self._known_agents.add(agent_id)
 
     def join_agent(self, channel_id: str, agent_id: str) -> None:
         self.ensure_agent_registered(agent_id)
@@ -118,49 +104,16 @@ class ChannelManager:
         if agents and agent_id in agents:
             agents.remove(agent_id)
             self.repository.remove_membership(ChannelMembership(channel_id=channel_id, agent_id=agent_id))
-        queue = self._agent_queues.get(agent_id)
-        if queue is not None:
-            queue.discard([channel_id])
+        if self._unread_handler is not None:
+            self._unread_handler.discard_agent_channels(agent_id, [channel_id])
 
     def channels_for_agent(self, agent_id: str) -> list[str]:
         return [channel_id for channel_id, members in self._memberships.items() if agent_id in members]
 
-    # ------------------------------------------------------------------
-    # Message delivery
-    # ------------------------------------------------------------------
-    def write(self, channel_id: str, message: ChannelMessage) -> ChannelMessage:
-        channel = self.find(channel_id)
-        stored = channel.write(message)
-        recipients = self._memberships.get(channel_id, set())
-        if stored.message_id is None:
-            raise ChannelRepositoryError("Repository did not return a message_id for stored message")
-        pointer = AgentMessagePointer(
-            channel_id=channel_id,
-            message_id=stored.message_id,
-            priority=stored.priority,
-        )
-        for agent_id in recipients:
-            queue = self._agent_queues.setdefault(agent_id, MessageQueue())
-            queue.put(pointer)
-        return stored
+    def members_for_channel(self, channel_id: str) -> Sequence[str]:
+        """指定チャネルに参加しているエージェントIDを昇順で返す。"""
 
-    def read_for_agent(
-        self,
-        agent_id: str,
-        *,
-        block: bool = False,
-        timeout: float | None = None,
-        allowed_channels: Iterable[str] | None = None,
-    ) -> ChannelMessage | None:
-        queue = self._agent_queues.get(agent_id)
-        if queue is None:
-            return None
-
-        allowed = list(allowed_channels) if allowed_channels is not None else None
-        pointer = queue.get(block=block, timeout=timeout, allowed_channels=allowed)
-        if pointer is None:
-            return None
-        return self.repository.fetch_message(pointer.channel_id, pointer.message_id)
+        return tuple(sorted(self._memberships.get(channel_id, set())))
 
     # ------------------------------------------------------------------
     # Restoration helpers
@@ -182,19 +135,7 @@ class ChannelManager:
     def _restore_memberships(self) -> None:
         for membership in self.repository.load_memberships():
             self._memberships[membership.channel_id].add(membership.agent_id)
-            self.ensure_agent_registered(membership.agent_id)
-
-    def _restore_unread(self) -> None:
-        for record in self.repository.load_unread_records():
-            queue = self._agent_queues.setdefault(record.agent_id, MessageQueue())
-            queue.put(
-                AgentMessagePointer(
-                    channel_id=record.channel_id,
-                    message_id=record.message_id,
-                    priority=record.priority,
-                    enqueued_at=record.enqueued_at,
-                )
-            )
+            self._known_agents.add(membership.agent_id)
 
     def _sync_counter(self, channel_id: str) -> None:
         prefix = "channel_"
@@ -202,3 +143,11 @@ class ChannelManager:
             suffix = channel_id[len(prefix) :]
             if suffix.isdigit():
                 self._next_index = max(self._next_index, int(suffix) + 1)
+
+    # ------------------------------------------------------------------
+    # Integration hooks
+    # ------------------------------------------------------------------
+    def attach_unread_handler(self, handler: UnreadQueueHandler) -> None:
+        """未読ポインタ破棄用ハンドラを登録する。"""
+
+        self._unread_handler = handler

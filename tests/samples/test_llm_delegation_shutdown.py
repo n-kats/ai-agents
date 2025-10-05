@@ -72,6 +72,7 @@ class DummyChannels:
 class DummyTools:
     def __init__(self, channels: DummyChannels, llm: "StubbornLLM", log: AgentLogTool) -> None:
         self.channels = channels
+        self.messages = channels
         self.llm = llm
         self.log = log
         self.stop_manager = None
@@ -97,6 +98,19 @@ class StubbornLLM:
         return StructuredChannelResponse(
             output_channel="analysis_workspace",
             message=StructuredChannelMessage(role="analysis_summary", content="done"),
+        )
+
+
+class RecordingLLM:
+    def __init__(self) -> None:
+        self.called = False
+
+    async def call_parsed_async(self, *args: Any, **kwargs: Any) -> StructuredChannelResponse:
+        del args, kwargs
+        self.called = True
+        return StructuredChannelResponse(
+            output_channel="analysis_workspace",
+            message=StructuredChannelMessage(role="analysis_summary", content="noop"),
         )
 
 
@@ -134,3 +148,26 @@ async def _run_shutdown_scenario() -> None:
     # テスト終了後に LLM 擬似タスクを解放してクリーンに終了させる
     llm.release.set()
     await asyncio.sleep(0)
+
+
+def test_delegation_agent_stop_before_run_exits_early() -> None:
+    asyncio.run(_run_stop_before_start_scenario())
+
+
+async def _run_stop_before_start_scenario() -> None:
+    channels = DummyChannels()
+    llm = RecordingLLM()
+    log_tool = AgentLogTool(agent_id="front_desk_agent")
+    tools = DummyTools(channels, llm, log_tool)
+    agent = DelegationLLMAgent(
+        agent_id="front_desk_agent",
+        system_prompt="system",
+        model="gpt-5-mini",
+        shutdown_grace_period=0.1,
+    )
+
+    agent.stop()
+
+    await asyncio.wait_for(agent.run_async(tools), timeout=0.5)
+
+    assert not llm.called

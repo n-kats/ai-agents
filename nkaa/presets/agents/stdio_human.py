@@ -13,7 +13,7 @@ from pydantic import BaseModel, Field
 from nkaa.framework.agent import AgentConfig, BaseAgent, BaseTools
 from nkaa.framework.channels.models import ChannelMessage
 from nkaa.framework.persistence import JsonLinesStateMixin
-from nkaa.framework.tools import ChannelTools
+from nkaa.framework.tools import ChannelTools, MessageTools
 
 
 class StdIOHumanHistoryRecord(BaseModel):
@@ -61,12 +61,15 @@ class StdIOHumanHistory(JsonLinesStateMixin[StdIOHumanHistoryRecord]):
 @dataclass
 class StdIOHumanAgentTools(BaseTools):
     channels: ChannelTools
+    messages: MessageTools
 
     def stop(self) -> None:
         self.channels.stop()
+        self.messages.stop()
 
     def save(self) -> None:
         self.channels.save()
+        self.messages.save()
 
 
 class StdIOHumanAgent(BaseAgent[StdIOHumanAgentTools]):
@@ -94,20 +97,19 @@ class StdIOHumanAgent(BaseAgent[StdIOHumanAgentTools]):
 
     def run(self, tools: StdIOHumanAgentTools) -> None:
         self._print_usage()
-        channel_tools = tools.channels
 
-        handled_message = self._process_incoming_messages(channel_tools)
+        handled_message = self._process_incoming_messages(tools)
 
-        self._initialize_send_targets(channel_tools)
-        self._print_current_targets(channel_tools)
+        self._initialize_send_targets(tools)
+        self._print_current_targets(tools)
 
         if not handled_message:
             print("[StdIOHumanAgent] 受信待ちです。必要に応じてメッセージやコマンドを入力してください。", flush=True)
 
         while not self._stop_requested:
-            message = channel_tools.read()
+            message = tools.messages.read()
             if message is None:
-                handled = self._handle_main_prompt(channel_tools)
+                handled = self._handle_main_prompt(tools)
                 if not handled:
                     time.sleep(0.2)
                 continue
@@ -120,10 +122,10 @@ class StdIOHumanAgent(BaseAgent[StdIOHumanAgentTools]):
                     request_id=self._extract_request_id(message),
                 )
             )
-            channel_name = channel_tools.get_channel_name(message.channel_id)
+            channel_name = tools.channels.get_channel_name(message.channel_id)
             self._display_message(message, channel_name)
-            self._handle_reply(channel_tools, message)
-            self._print_current_targets(channel_tools)
+            self._handle_reply(tools, message)
+            self._print_current_targets(tools)
 
     def stop(self) -> None:
         self._stop_requested = True
@@ -138,7 +140,7 @@ class StdIOHumanAgent(BaseAgent[StdIOHumanAgentTools]):
 
     def _send_payload(
         self,
-        tools: ChannelTools,
+        tools: StdIOHumanAgentTools,
         channel_id: str,
         content: str,
         *,
@@ -160,8 +162,8 @@ class StdIOHumanAgent(BaseAgent[StdIOHumanAgentTools]):
             self.message_field: content,
         }
 
-        tools.send(channel_id, payload)
-        channel_name = tools.get_channel_name(channel_id)
+        tools.messages.send(channel_id, payload)
+        channel_name = tools.channels.get_channel_name(channel_id)
         print(
             f"[StdIOHumanAgent] チャンネル '{channel_name}' へ request_id={request_id} を送信しました。",
             flush=True,
@@ -178,17 +180,17 @@ class StdIOHumanAgent(BaseAgent[StdIOHumanAgentTools]):
     # ------------------------------------------------------------------
     # Incoming handling
     # ------------------------------------------------------------------
-    def _process_incoming_messages(self, tools: ChannelTools) -> bool:
+    def _process_incoming_messages(self, tools: StdIOHumanAgentTools) -> bool:
         handled = False
         while True:
-            message = tools.read()
+            message = tools.messages.read()
             if message is None:
                 break
             if self._stop_requested:
                 break
 
             handled = True
-            channel_name = tools.get_channel_name(message.channel_id)
+            channel_name = tools.channels.get_channel_name(message.channel_id)
             self._append_history(
                 StdIOHumanHistoryRecord(
                     channel_id=message.channel_id,
@@ -242,18 +244,18 @@ class StdIOHumanAgent(BaseAgent[StdIOHumanAgentTools]):
             flush=True,
         )
 
-    def _initialize_send_targets(self, tools: ChannelTools) -> None:
+    def _initialize_send_targets(self, tools: StdIOHumanAgentTools) -> None:
         # 初期状態では参加済みチャネルすべてを送信対象とする。
         self._current_send_channels = []
 
-    def _print_current_targets(self, tools: ChannelTools) -> None:
+    def _print_current_targets(self, tools: StdIOHumanAgentTools) -> None:
         print(
             f"[StdIOHumanAgent] 現在の送信先: {self._format_targets(tools)}",
             flush=True,
         )
 
-    def _format_targets(self, tools: ChannelTools) -> str:
-        metadata = {meta.id: meta for meta in tools.joined_channel_metadata()}
+    def _format_targets(self, tools: StdIOHumanAgentTools) -> str:
+        metadata = {meta.id: meta for meta in tools.channels.joined_channel_metadata()}
         targets = self._effective_targets(metadata)
         if not targets:
             return "なし"
@@ -264,7 +266,7 @@ class StdIOHumanAgent(BaseAgent[StdIOHumanAgentTools]):
             names.append(name)
         return ", ".join(names)
 
-    def _handle_main_prompt(self, tools: ChannelTools) -> bool:
+    def _handle_main_prompt(self, tools: StdIOHumanAgentTools) -> bool:
         prompt = "[StdIOHumanAgent] メッセージまたはコマンド（送信先: %s）: " % self._format_targets(tools)
         text = self._safe_input(prompt)
         if not text:
@@ -278,7 +280,7 @@ class StdIOHumanAgent(BaseAgent[StdIOHumanAgentTools]):
         self._send_to_targets(tools, content)
         return True
 
-    def _handle_command(self, command: str, tools: ChannelTools) -> None:
+    def _handle_command(self, command: str, tools: StdIOHumanAgentTools) -> None:
         if command == "/skip":
             print("[StdIOHumanAgent] 入力をスキップしました。", flush=True)
             return
@@ -295,8 +297,8 @@ class StdIOHumanAgent(BaseAgent[StdIOHumanAgentTools]):
             return
         print(f"[StdIOHumanAgent] 未対応のコマンドです: {command}", flush=True)
 
-    def _list_channels(self, tools: ChannelTools) -> None:
-        metadata = tools.joined_channel_metadata()
+    def _list_channels(self, tools: StdIOHumanAgentTools) -> None:
+        metadata = tools.channels.joined_channel_metadata()
         if not metadata:
             print("[StdIOHumanAgent] 参加チャネルがありません。", flush=True)
             return
@@ -308,8 +310,8 @@ class StdIOHumanAgent(BaseAgent[StdIOHumanAgentTools]):
             mark = "*" if meta.id in current else "-"
             print(f"  {mark} {name} ({meta.id}) {description}", flush=True)
 
-    def _set_send_targets(self, args: str, tools: ChannelTools) -> None:
-        metadata = tools.joined_channel_metadata()
+    def _set_send_targets(self, args: str, tools: StdIOHumanAgentTools) -> None:
+        metadata = tools.channels.joined_channel_metadata()
         if not metadata:
             print("[StdIOHumanAgent] 参加チャネルがありません。", flush=True)
             return
@@ -354,8 +356,8 @@ class StdIOHumanAgent(BaseAgent[StdIOHumanAgentTools]):
         self._current_send_channels = selected
         self._print_current_targets(tools)
 
-    def _send_to_targets(self, tools: ChannelTools, content: str) -> None:
-        metadata = {meta.id: meta for meta in tools.joined_channel_metadata()}
+    def _send_to_targets(self, tools: StdIOHumanAgentTools, content: str) -> None:
+        metadata = {meta.id: meta for meta in tools.channels.joined_channel_metadata()}
         targets = self._effective_targets(metadata)
         if not targets:
             print("[StdIOHumanAgent] 送信可能なチャネルがありません。", flush=True)
@@ -385,7 +387,7 @@ class StdIOHumanAgent(BaseAgent[StdIOHumanAgentTools]):
         if self._history is not None:
             self._history.append(record)
 
-    def _handle_reply(self, tools: ChannelTools, message: ChannelMessage) -> None:
+    def _handle_reply(self, tools: StdIOHumanAgentTools, message: ChannelMessage) -> None:
         prompt = "[StdIOHumanAgent] 返信を入力してください（/skip でスキップ）: "
         while True:
             reply = self._safe_input(prompt).strip()

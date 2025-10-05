@@ -19,15 +19,12 @@ from nkaa.framework.agent import (
     StandardManagerConfig,
     ThreadingManagerExecutionBackend,
 )
-from nkaa.framework.channels import (
-    ChannelManager,
-    ChannelSearchQuery,
-    DatabaseChannelConfig,
-    InMemoryChannelRepository,
-)
+from nkaa.framework.channels import ChannelManager, ChannelSearchQuery, DatabaseChannelConfig, InMemoryChannelRepository
+from nkaa.framework.channels.message_routing import ChannelMessageRouteProvider
+from nkaa.framework.message_manager import MessageManager
 from nkaa.framework.channels.models import UnreadRecord
 from nkaa.framework.logging import AgentLogTool, configure_logging
-from nkaa.framework.tools import ChannelTools
+from nkaa.framework.tools import ChannelTools, MessageTools
 
 # ---------------------------------------------------------------------------
 # ツール定義
@@ -37,6 +34,7 @@ from nkaa.framework.tools import ChannelTools
 @dataclass
 class DemoManagerTools(BaseTools):
     channel_manager: ChannelManager
+    message_manager: MessageManager
     stop_manager: Callable[[], None] | None = None
 
     def stop(self) -> None:
@@ -49,6 +47,7 @@ class DemoManagerTools(BaseTools):
 @dataclass
 class DemoAgentTools(BaseTools):
     channels: ChannelTools
+    messages: MessageTools
     log: AgentLogTool
     stop_manager: Callable[[], None] | None = None
 
@@ -61,9 +60,11 @@ class DemoAgentTools(BaseTools):
 
 def demo_adapter(agent: BaseAgent[DemoAgentTools], manager_tools: DemoManagerTools) -> DemoAgentTools:
     channel_tools = ChannelTools(agent_id=agent.agent_id, manager=manager_tools.channel_manager)
+    message_tools = MessageTools(agent_id=agent.agent_id, manager=manager_tools.message_manager)
     log_tool = AgentLogTool(agent_id=agent.agent_id)
     return DemoAgentTools(
         channels=channel_tools,
+        messages=message_tools,
         log=log_tool,
         stop_manager=manager_tools.stop_manager,
     )
@@ -124,7 +125,7 @@ class AlertPublisher(BaseDemoAgent):
         channel_id = self.channel_id
         with tools.log.context(channel_id=channel_id):
             for payload in self.payloads:
-                stored = tools.channels.send(channel_id, payload)
+                stored = tools.messages.send(channel_id, payload)
                 log.info(
                     "sent message",
                     message_id=stored.message_id,
@@ -176,7 +177,7 @@ class AlertSubscriber(BaseDemoAgent):
 
         idle_cycles = 0
         while idle_cycles < self.max_idle_cycles:
-            message = tools.channels.read(block=True, timeout=self.read_timeout)
+            message = tools.messages.read(block=True, timeout=self.read_timeout)
             if message is None:
                 idle_cycles += 1
                 newly_joined = tools.channels.join_matching(self.query)
@@ -212,14 +213,17 @@ class SnapshotObserver(BaseDemoAgent):
         if self.wait_before_snapshot > 0:
             time.sleep(self.wait_before_snapshot)
         manager = tools.channels.manager
-        records = manager.snapshot_unread_records(self.target_agent_id)
+        records = tools.messages.manager.snapshot_unread_records(self.target_agent_id)
         with tools.log.context(target_agent=self.target_agent_id):
             self._log_records(tools, records)
 
         manager.repository.replace_unread_records(records)
 
-        restored_manager = ChannelManager(manager.repository)
-        restored_message = restored_manager.read_for_agent(self.target_agent_id)
+        restored_channel_manager = ChannelManager(manager.repository)
+        restored_route_provider = ChannelMessageRouteProvider(restored_channel_manager)
+        restored_message_manager = MessageManager(manager.repository, restored_route_provider)
+        restored_channel_manager.attach_unread_handler(restored_message_manager)
+        restored_message = restored_message_manager.read_for_agent(self.target_agent_id)
         tools.log.logger.info("restored message", message=restored_message)
 
         if callable(tools.stop_manager):
@@ -299,7 +303,15 @@ class DemoManagerConfig(StandardManagerConfig):
             raise ValueError(f"Unknown agent type: {type_name}") from exc
 
     def build_tools(self) -> DemoManagerTools:
-        return DemoManagerTools(channel_manager=ChannelManager(InMemoryChannelRepository()))
+        repository = InMemoryChannelRepository()
+        channel_manager = ChannelManager(repository)
+        route_provider = ChannelMessageRouteProvider(channel_manager)
+        message_manager = MessageManager(repository, route_provider)
+        channel_manager.attach_unread_handler(message_manager)
+        return DemoManagerTools(
+            channel_manager=channel_manager,
+            message_manager=message_manager,
+        )
 
 
 # ---------------------------------------------------------------------------

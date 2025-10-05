@@ -7,21 +7,31 @@
 
 ### ChannelManager (`nkaa/framework/channels/manager.py`)
 - チャネル ID の発番とチャネルインスタンスの登録を担当する。
-- エージェントの参加 (`join_agent`)・離脱 (`leave_agent`) を管理し、所属チャネルごとの未読キューを更新する。
-- メッセージ書き込み時に履歴を保存し、各エージェント専用キューへメッセージ ID と優先度を投入する。
+- エージェントの参加 (`join_agent`)・離脱 (`leave_agent`) を管理し、所属チャネル情報をリポジトリへ反映する。
 - `search_channels` でチャネルメタデータを条件付きに列挙でき、エージェントの探索・購読フローに利用する。
 - チャネル生成時に永続化用コールバック（`save_hook`）をチャネルへ渡し、チャネル単体での保存操作を可能にする。
-- リポジトリからチャネル・未読情報を復元して起動時状態を再構成する。
-- `read_for_agent` は未読キューからメッセージを1件解決し、履歴リポジトリに問い合わせてメッセージ全体を返す。アプリケーション層からは `ChannelTools.read` を経由するのが基本方針で、直接呼び出すのはテストや復旧ユーティリティに限定する。
+- リポジトリからチャネル・メンバーシップ情報を復元して起動時状態を再構成する。
+- 未読キューを扱うハンドラを外部から受け取り、離脱時に `attach_unread_handler` 経由で未読ポインタ破棄を委譲する。
+
+### MessageManager (`nkaa/framework/message_manager.py`)
+- メッセージ書き込み時に履歴を保存し、各エージェント専用キューへメッセージ ID と優先度を投入する。
+- `read_for_agent` で未読キューからポインタを取り出し、リポジトリからメッセージ本体を解決する。
+- 未読スナップショット (`snapshot_unread_records`) を提供し、クラッシュ復旧向けのエクスポート／インポート処理を担う。
+- エージェント離脱時に `discard_agent_channels` を用いて該当チャネルのポインタを破棄する。
+- 送信先解決には `MessageRouteProvider` 抽象を利用する。既定では `ChannelMessageRouteProvider` を介して `ChannelManager` を適合させるが、将来的にチャネル以外のシステムメッセージ経路にも差し替え可能となる。
 
 ### ChannelTools (`nkaa/framework/tools.py`)
-- エージェントが利用するチャネル操作の窓口。
-- `join/leave/send/read` や `snapshot_unread`・`save_channel` を提供し、内部的に `ChannelManager` の API を呼び出す。
-- `search` でメタデータ検索をラップし、`join_matching` で検索結果へ自動参加するユーティリティを提供する。
-- `save()` で担当エージェントの未読キューをスナップショットとして永続化する。既存スナップショットから自身のレコードだけを差し替えるため、他エージェントの未読状態を維持できる。
-- エージェント ID ごとに初期化され、初期化時に未読キュー登録を確実に行う。
-- `read` はブロッキング／ノンブロッキングの切り替えだけを提供し、チャネル ID のフィルタリングやフォールバック判定はすべて `ChannelManager.read_for_agent` に任せる。アプリ側は `ChannelTools` を通じてのみ読み取ることで、一貫したアクセス制御とロギングを維持できる。
+- エージェントが利用するチャネルメタデータ操作の窓口。
+- `join/leave`・`search`・`join_matching` などの操作を `ChannelManager` に委譲する。
+- `save_channel` によりチャネル単体の永続化をトリガーできる。
 - `joined_channel_metadata()` により参加済みチャネルの `ChannelMetadata` を直接取得できる。プロンプト組み立てや UI 表示など、チャネル名と説明をエージェントへ渡す用途で活用する。
+- メッセージ送受信は `MessageTools` に切り出しており、`ChannelTools` はチャネル管理機能に専念する。
+
+### MessageTools (`nkaa/framework/tools.py`)
+- メッセージの送受信・未読スナップショット保存を `MessageManager` 経由で提供するツール。
+- `send/send_async` でチャネルへメッセージを投稿し、`read/read_async` で未読を取得する。
+- `save()` で担当エージェントの未読キューをスナップショットとして永続化する。既存スナップショットから自身のレコードだけを差し替えるため、他エージェントの未読状態を維持できる。
+- 停止シグナル (`StopMessage`) を含めた協調停止を `read_async` で扱い、`stop_event` 連動によるキャンセルをサポートする。
 
 ### ChannelRepository (`nkaa/framework/channels/repository.py`)
 - チャネルメタデータ、メッセージ履歴、未読レコード、所属情報を読み書きする抽象層。
@@ -36,7 +46,7 @@
 ## 決定済みの仕様
 - メッセージ履歴はデータベース（PostgreSQL を想定）に保存し、チャネル本体は `ChannelRepository` を通じて永続化操作を行う。
 - `ChannelMessage.payload` には JSON など構造化データを保持できる。永続層でのシリアライズ形式はリポジトリ実装が担う。
-- `ChannelManager.snapshot_unread_records()` で未読キューのスナップショットを取得し、永続化はリポジトリやエージェント側の責務として扱う。
+- `MessageManager.snapshot_unread_records()` で未読キューのスナップショットを取得し、永続化はリポジトリやエージェント側の責務として扱う。
 - チャネル ID は `channel_{n}` 形式で発番し、外部指定は今後の拡張とする。
 - InMemory リポジトリを用いた動作確認では、後述のサンプルコードのように `ChannelManager` と `ChannelTools` を組み合わせて基本的な送受信と復元フローを確認できる。
 
@@ -53,29 +63,43 @@
 以下は InMemory リポジトリを使ってチャネルを体験的に確認する最小コード例です。
 
 ```python
-from nkaa.framework.channels import ChannelManager, DatabaseChannelConfig, InMemoryChannelRepository
-from nkaa.framework.tools import ChannelTools
+from nkaa.framework.channels import (
+    ChannelManager,
+    ChannelMessageRouteProvider,
+    DatabaseChannelConfig,
+    InMemoryChannelRepository,
+)
+from nkaa.framework.message_manager import MessageManager
+from nkaa.framework.tools import ChannelTools, MessageTools
 
 repository = InMemoryChannelRepository()
-manager = ChannelManager(repository)
-channel = manager.create(DatabaseChannelConfig(name="demo"))
+channel_manager = ChannelManager(repository)
+route_provider = ChannelMessageRouteProvider(channel_manager)
+message_manager = MessageManager(repository, route_provider)
+channel_manager.attach_unread_handler(message_manager)
+channel = channel_manager.create(DatabaseChannelConfig(name="demo"))
 
-alice = ChannelTools(agent_id="alice", manager=manager)
-bob = ChannelTools(agent_id="bob", manager=manager)
+alice_channels = ChannelTools(agent_id="alice", manager=channel_manager)
+bob_channels = ChannelTools(agent_id="bob", manager=channel_manager)
+alice_messages = MessageTools(agent_id="alice", manager=message_manager)
+bob_messages = MessageTools(agent_id="bob", manager=message_manager)
 
-alice.join(channel.id)
-bob.join(channel.id)
+alice_channels.join(channel.id)
+bob_channels.join(channel.id)
 
-alice.send(channel.id, {"text": "こんにちは"})
-message = bob.read()
+alice_messages.send(channel.id, {"text": "こんにちは"})
+message = bob_messages.read()
 print("Bob received:", message.payload if message else None)
 
 # エージェントごとに未読スナップショットを永続化
-alice.save()
-bob.save()
+alice_messages.save()
+bob_messages.save()
 
-restored_manager = ChannelManager(repository)
-restored_message = restored_manager.read_for_agent("bob")
+restored_channel_manager = ChannelManager(repository)
+restored_route_provider = ChannelMessageRouteProvider(restored_channel_manager)
+restored_message_manager = MessageManager(repository, restored_route_provider)
+restored_channel_manager.attach_unread_handler(restored_message_manager)
+restored_message = restored_message_manager.read_for_agent("bob")
 print("Restored unread:", restored_message.payload if restored_message else None)
 ```
 

@@ -22,10 +22,12 @@ from nkaa.framework.agent import (
     ThreadingManagerExecutionBackend,
 )
 from nkaa.framework.channels import ChannelManager, DatabaseChannelConfig, InMemoryChannelRepository
+from nkaa.framework.channels.message_routing import ChannelMessageRouteProvider
 from nkaa.framework.channels.models import ChannelMetadata
+from nkaa.framework.message_manager import MessageManager
 from nkaa.framework.messages import StopMessage
 from nkaa.framework.logging import AgentLogTool, configure_logging
-from nkaa.framework.tools import ChannelTools
+from nkaa.framework.tools import ChannelTools, MessageTools
 from nkaa.presets.agents import (
     StdIOHumanAgentConfig,
     StdIOHumanAgentTools,
@@ -83,7 +85,8 @@ def _channel_display_name(metadata: ChannelMetadata) -> str:
 
 def _summarize_payload(payload: Any, *, limit: int = 160) -> str:
     try:
-        text = json.dumps(payload, ensure_ascii=False) if isinstance(payload, (dict, list)) else str(payload)
+        text = json.dumps(payload, ensure_ascii=False) if isinstance(
+            payload, (dict, list)) else str(payload)
     except Exception:  # pragma: no cover - 予期せぬシリアライズ失敗時
         text = repr(payload)
     if len(text) <= limit:
@@ -110,6 +113,7 @@ class StructuredChannelResponse(BaseModel):
 @dataclass
 class DelegationManagerTools(BaseTools):
     channel_manager: ChannelManager
+    message_manager: MessageManager
     llm: LLMCallTool
     stop_manager: Callable[[], None] | None = None
 
@@ -123,16 +127,19 @@ class DelegationManagerTools(BaseTools):
 @dataclass
 class DelegationAgentTools(BaseTools):
     channels: ChannelTools
+    messages: MessageTools
     llm: LLMCallTool
     log: AgentLogTool
     stop_manager: Callable[[], None] | None = None
 
     def stop(self) -> None:
         self.channels.stop()
+        self.messages.stop()
         self.llm.stop()
 
     def save(self) -> None:
         self.channels.save()
+        self.messages.save()
         self.llm.save()
 
     def joined_channel_metadata(self) -> list[ChannelMetadata]:
@@ -155,14 +162,17 @@ class DelegationLLMAgent(BaseAgent[DelegationAgentTools]):
         self._loop: asyncio.AbstractEventLoop | None = None
         self._stop_event: asyncio.Event | None = None
         self._inflight_tasks: set[asyncio.Task[Any]] = set()
+        self._pending_stop: bool = False
 
     def stop(self) -> None:
+        self._pending_stop = True
         loop = self._loop
         stop_event = self._stop_event
         if loop is None or stop_event is None:
             return
 
         def _propagate_stop() -> None:
+            self._pending_stop = False
             if not stop_event.is_set():
                 stop_event.set()
             for task in list(self._inflight_tasks):
@@ -200,23 +210,28 @@ class DelegationLLMAgent(BaseAgent[DelegationAgentTools]):
     async def run_async(self, tools: DelegationAgentTools) -> None:
         log_tool = tools.log
         agent_logger = (
-            log_tool.logger if log_tool is not None else logger.bind(agent_id=self.agent_id)
+            log_tool.logger if log_tool is not None else logger.bind(
+                agent_id=self.agent_id)
         )
         loop = asyncio.get_running_loop()
         stop_event = asyncio.Event()
         self._loop = loop
         self._stop_event = stop_event
+        if self._pending_stop:
+            stop_event.set()
+            self._pending_stop = False
         try:
             while not stop_event.is_set():
                 try:
-                    incoming = await tools.channels.read_async(
+                    incoming = await tools.messages.read_async(
                         poll_interval=0.5,
                         stop_event=stop_event,
                     )
                 except asyncio.CancelledError:
                     break
                 if isinstance(incoming, StopMessage):
-                    agent_logger.info("Received stop signal; shutting down agent {}", self.agent_id)
+                    agent_logger.info(
+                        "Received stop signal; shutting down agent {}", self.agent_id)
                     break
                 message = incoming
                 if message is None:
@@ -235,10 +250,12 @@ class DelegationLLMAgent(BaseAgent[DelegationAgentTools]):
                 payload = message.payload
                 channel_metadata = tools.joined_channel_metadata()
                 if not channel_metadata:
-                    agent_logger.warning("Agent {} is not joined to any channels", self.agent_id)
+                    agent_logger.warning(
+                        "Agent {} is not joined to any channels", self.agent_id)
                     await asyncio.sleep(0)
                     continue
-                incoming = next((meta for meta in channel_metadata if meta.id == message.channel_id), None)
+                incoming = next(
+                    (meta for meta in channel_metadata if meta.id == message.channel_id), None)
                 if incoming is None:
                     with (log_tool.context(channel_id=message.channel_id) if log_tool else nullcontext()):
                         agent_logger.debug(
@@ -310,9 +327,11 @@ class DelegationLLMAgent(BaseAgent[DelegationAgentTools]):
                         )
                     target = message.channel_id
                 outgoing = dispatch.message.model_dump()
-                await tools.channels.send_async(target, outgoing)
-                target_meta = next((meta for meta in channel_metadata if meta.id == target), None)
-                target_label = _channel_display_name(target_meta) if target_meta else target
+                await tools.messages.send_async(target, outgoing)
+                target_meta = next(
+                    (meta for meta in channel_metadata if meta.id == target), None)
+                target_label = _channel_display_name(
+                    target_meta) if target_meta else target
                 with (log_tool.context(channel_id=target) if log_tool else nullcontext()):
                     agent_logger.info(
                         "Sent message to {} with role={}",
@@ -342,6 +361,7 @@ class DelegationLLMAgent(BaseAgent[DelegationAgentTools]):
                         task.cancel()
             self._loop = None
             self._stop_event = None
+            self._pending_stop = False
 
 
 async def invoke_structured_llm(
@@ -363,6 +383,7 @@ async def invoke_structured_llm(
     else:
         channel_name = "n/a"
         channel_id = None
+
     def _context() -> Any:
         return log.context(channel_id=channel_id) if log else nullcontext()
 
@@ -377,7 +398,8 @@ async def invoke_structured_llm(
         )
     except asyncio.CancelledError:
         with _context():
-            bound_logger.warning("LLM call cancelled. channel={} model={}", channel_name, model)
+            bound_logger.warning(
+                "LLM call cancelled. channel={} model={}", channel_name, model)
         raise
     except Exception:
         prompt_dump = json.dumps(messages, ensure_ascii=False, indent=2)
@@ -394,10 +416,12 @@ async def invoke_structured_llm(
 
 def delegation_adapter(agent: BaseAgent[Any], manager_tools: DelegationManagerTools) -> BaseTools:
     base_channel_tools = ChannelTools(agent_id=agent.agent_id, manager=manager_tools.channel_manager)
+    message_tools = MessageTools(agent_id=agent.agent_id, manager=manager_tools.message_manager)
     log_tool = AgentLogTool(agent_id=agent.agent_id)
     if isinstance(agent, DelegationLLMAgent):
         return DelegationAgentTools(
             channels=base_channel_tools,
+            messages=message_tools,
             llm=manager_tools.llm,
             log=log_tool,
             stop_manager=manager_tools.stop_manager,
@@ -405,10 +429,11 @@ def delegation_adapter(agent: BaseAgent[Any], manager_tools: DelegationManagerTo
     if isinstance(agent, TextualHumanAgent):
         return TextualHumanAgentTools(
             channels=base_channel_tools,
+            messages=message_tools,
             log=log_tool,
             stop_manager=manager_tools.stop_manager,
         )
-    return StdIOHumanAgentTools(channels=base_channel_tools)
+    return StdIOHumanAgentTools(channels=base_channel_tools, messages=message_tools)
 
 
 class DelegationLLMAgentConfig(AgentConfig):
@@ -447,8 +472,15 @@ class DelegationManagerConfig(StandardManagerConfig):
 
     def build_tools(self) -> DelegationManagerTools:
         repository = InMemoryChannelRepository()
-        manager = ChannelManager(repository)
-        return DelegationManagerTools(channel_manager=manager, llm=LLMCallTool())
+        channel_manager = ChannelManager(repository)
+        route_provider = ChannelMessageRouteProvider(channel_manager)
+        message_manager = MessageManager(repository, route_provider)
+        channel_manager.attach_unread_handler(message_manager)
+        return DelegationManagerTools(
+            channel_manager=channel_manager,
+            message_manager=message_manager,
+            llm=LLMCallTool(),
+        )
 
 
 def configure_delegation_channels(manager: StandardManager) -> None:

@@ -15,7 +15,7 @@
 1. `AlertPublisher`（bootstrap 用）がチャネルを生成し、`ChannelMetadata` を出力。
 2. `AlertSubscriber` が `ChannelSearchQuery` を使ってチャネルへ参加し、以降のメッセージを受信。
 3. 別の `AlertPublisher` が複数メッセージを送信し、`AlertSubscriber` が未読を処理。
-4. 追加のアラート送信後、`SnapshotObserver` が `ChannelManager.snapshot_unread_records()` を通じて未読スナップショットを採取・永続化し、新しい `ChannelManager` を復元して未読が保持されていることを確認します。
+4. 追加のアラート送信後、`SnapshotObserver` が `MessageManager.snapshot_unread_records()` を通じて未読スナップショットを採取・永続化し、新しい `ChannelManager` / `MessageManager` を復元して未読が保持されていることを確認します。
 
 > メモ: サンプル実行時は `ThreadingManagerExecutionBackend` を指定して `StandardManager` をスレッド実行モードに切り替えています。`StandardManager.run()` は呼び出さず、`apply_adapter` を通じてエージェントを逐次実行する構成です。
 

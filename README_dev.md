@@ -56,7 +56,7 @@
 チャンネルエージェントは、単にチャンネルとしての機能（情報の集約所）に制限して、チャンネルエージェントはタスクエージェントに実施させる。それにともない、タスクエージェントは単にエージェントと呼ぶことにする。
 
 # 現状把握メモ
-* `ChannelManager.snapshot_unread_records()` で未読キューを取得し、`ChannelTools.save()` が担当エージェント分をリポジトリへ反映。
+* `MessageManager.snapshot_unread_records()` で未読キューを取得し、`MessageTools.save()` が担当エージェント分をリポジトリへ反映。
 * プリセット：`nkaa/presets/managers/single_agent_model.py` が単体エージェント例。`SingleAgentTools` に LLM ダミー (`LLMCallTool`)・ログ・入力・停止関数を束ねる。
 * テスト：`tests/framework/test_channels.py` で InMemory リポジトリの送受信・復元・離脱を確認。
 * ドキュメント連携：設計メモは `docs/concept.md`、進捗は `docs/implementation_status.md`、チャンネル仕様は `docs/channel_spec.md` に置いてある。

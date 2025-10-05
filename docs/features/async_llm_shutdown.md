@@ -16,7 +16,8 @@ Textual UI からの終了要求でマネージャを即時停止させたいが
 ## 実装状況（最新）
 
 - `StandardManager.run()` は `asyncio.run(self.run_async())` を呼び出す薄いラッパーになり、非同期版では停止イベントを `asyncio.to_thread` で監視したうえで `tools.stop()`・`agent.stop()`・`join()` をシーケンシャルに実行する。
-- `ChannelTools` に `read_async` / `send_async` を追加し、`asyncio.to_thread` + ポーリングタイムアウトでブロック読み取りをラップ。キャンセル時は `stop_event` を参照して即座に停止シグナル (`StopMessage`) を返す。
+- `MessageTools` に `read_async` / `send_async` を追加し、`asyncio.to_thread` + ポーリングタイムアウトでブロック読み取りをラップ。キャンセル時は `stop_event` を参照して即座に停止シグナル (`StopMessage`) を返す。
+- メッセージ配送責務を `MessageManager` へ分離し、`ChannelManager` はチャネルメタデータとメンバーシップの管理に注力できるようにした。離脱時は `MessageManager.discard_agent_channels()` を介して未読ポインタを破棄する。
 - `LLMCallTool` に `acreate_response` / `call_parsed_async` など複数の `async` API を追加し、OpenAI SDK の `AsyncOpenAI` を利用したキャンセル可能な呼び出しを実現。同期メソッドは従来どおり `OpenAI` クライアントを使用し互換性を維持。
 - `DelegationLLMAgent` は `run_async` を新設し、`asyncio.create_task` で LLM 呼び出しを追跡しつつ `/quit` による `stop()` シグナルで未完了タスクを `cancel()` する。`invoke_structured_llm` も `async def` 化してログと例外ハンドリングを整理した。
 - `DelegationLLMAgent` に `shutdown_grace_period` を導入し、キャンセルに応答しない LLM タスクでも一定時間後に待機を打ち切れるようにした。
@@ -27,10 +28,10 @@ Textual UI からの終了要求でマネージャを即時停止させたいが
 
 ## 実装ステップ（更新版）
 
-### 1. `ChannelManager` / `ChannelTools` の非同期 API 整備
-- 既存の優先度キューは維持しつつ、`ChannelTools.read_async()` で `asyncio.to_thread` + タイムアウトポーリングを実装。キャンセル時に `stop_event` を参照し、同期待ちから抜けられるようにした。
-- 書き込みについても `send_async()` を追加し、ブロッキング I/O をイベントループ外へ逃がす。
-- 未読スナップショットは同期処理のままとし、`ChannelTools.save()` で整合性を担保する（必要に応じて将来 `asyncio.Lock` を導入）。
+### 1. `MessageManager` / `MessageTools` の非同期 API 整備
+- 既存の優先度キューは維持しつつ、`MessageTools.read_async()` で `asyncio.to_thread` + タイムアウトポーリングを実装。キャンセル時に `stop_event` を参照し、同期待ちから抜けられるようにした。
+- 書き込みについても `MessageTools.send_async()` を追加し、ブロッキング I/O をイベントループ外へ逃がす。
+- 未読スナップショットは同期処理のままとし、`MessageTools.save()` で整合性を担保する（必要に応じて将来 `asyncio.Lock` を導入）。
 
 ### 2. マネージャーとエージェントの実行パターン見直し
 - `StandardManager.run_async()` を実装し、停止イベント待機・ツール停止・エージェント停止・`join()`・`save()` を順序付けた。`run()` は `asyncio.run` で包んだ互換ラッパー。
@@ -42,7 +43,7 @@ Textual UI からの終了要求でマネージャを即時停止させたいが
 - 同期 API は従来どおり `OpenAI` クライアントを利用し、既存コードとの互換性を維持。
 
 ### 4. 共有リソースの排他制御と保存
-- ログツールは従来どおり同期ロガーを利用し、`DelegationLLMAgent` 側で停止シグナルを受けた段階で LLM タスクをキャンセル → `ChannelTools.save()` → `manager.save()` を順序付けた。さらに詳細な排他制御や UI 側テストは今後の課題とする。
+- ログツールは従来どおり同期ロガーを利用し、`DelegationLLMAgent` 側で停止シグナルを受けた段階で LLM タスクをキャンセル → `MessageTools.save()` → `manager.save()` を順序付けた。さらに詳細な排他制御や UI 側テストは今後の課題とする。
 
 ### 5. テスト戦略
 - `tests/framework/test_channels.py` に `asyncio.run` ベースの非同期テストを追加済み。
@@ -54,7 +55,7 @@ Textual UI からの終了要求でマネージャを即時停止させたいが
 - キャンセル後に中断された対話をどこまで履歴に残すか、UI 表示の仕様（ユーザへの通知方法）を検討する。
 
 ## アクションアイテム
-1. ✅ `ChannelTools.read_async` / `send_async` を追加し、非同期ユニットテストを整備した。
+1. ✅ `MessageTools.read_async` / `send_async` を追加し、非同期ユニットテストを整備した。
 2. ✅ `DelegationLLMAgent.run_async` と `LLMCallTool` の async API を実装し、サンプルでの動作を移行した。
 3. ☐ Textual UI からの停止要求で `asyncio` タスクキャンセルが期待通り伝播する統合テストを整備する。
 4. ✅ ドキュメント（本ページおよび `docs/implementation_status.md`）へ設計意図と進捗を記録した。

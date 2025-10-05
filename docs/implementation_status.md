@@ -15,7 +15,10 @@
 - [ ] エージェントが能動的にチャネル検索・購読できる API 設計（検索条件やアクセス制御など）。
   - [x] `ChannelSearchQuery`・`ChannelManager.search_channels`・`ChannelTools.search`/`join_matching` を追加し、メタデータ条件での検索と自動参加をサポート。
 - [ ] メッセージペイロードのバージョニング/検証ルールと後方互換性戦略の策定。
-- [ ] `ChannelManager.snapshot_unread_records()` を活用した未読スナップショット運用ポリシーとクラッシュ復旧手順の整備（暫定的に `ChannelTools.save()` で担当エージェント分を永続化）。
+- [ ] `MessageManager.snapshot_unread_records()` を活用した未読スナップショット運用ポリシーとクラッシュ復旧手順の整備（暫定的に `MessageTools.save()` で担当エージェント分を永続化）。
+- [x] `ChannelTools` をチャネルメタデータ管理専用へ絞り、メッセージ入出力は新設した `MessageTools` に分離した。`StopMessage` 受信など終了シグナル処理も `MessageTools.read_async` で扱うように変更済み。
+- [x] メッセージ配送と未読キュー管理を `MessageManager` として独立させ、`ChannelManager` はチャネルメタデータとメンバーシップ管理に専念するよう再構成した。`ChannelManager.leave_agent` からは `MessageManager` 経由で未読ポインタ破棄を呼び出す。
+- [x] `MessageRouteProvider` 抽象を導入し、`MessageManager` をチャネル管理から切り離した。標準構成では `ChannelMessageRouteProvider` を用いて `ChannelManager` を適合させ、将来的なシステム向けルート追加に備える。
 - [x] loguru ベースのログ基盤を整備（`configure_logging`・`LogBufferSink`・`LogStream`・`AgentLogTool`・`LogPanelAdapter`）。
 
 ## Tool Injection / Adapter

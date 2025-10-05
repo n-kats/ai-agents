@@ -21,7 +21,7 @@ if TYPE_CHECKING:
 from nkaa.framework.agent import AgentConfig, BaseAgent, BaseTools
 from nkaa.framework.channels.models import ChannelMessage
 from nkaa.framework.logging import AgentLogTool, LogPanelAdapter
-from nkaa.framework.tools import ChannelTools
+from nkaa.framework.tools import ChannelTools, MessageTools
 
 from .stdio_human import StdIOHumanHistory, StdIOHumanHistoryRecord
 
@@ -114,14 +114,17 @@ def _suppress_signal_registration_errors(log: Logger) -> Iterator[None]:
 @dataclass
 class TextualHumanAgentTools(BaseTools):
     channels: ChannelTools
+    messages: MessageTools
     log: AgentLogTool | None = None
     stop_manager: Callable[[], None] | None = None
 
     def stop(self) -> None:
         self.channels.stop()
+        self.messages.stop()
 
     def save(self) -> None:
         self.channels.save()
+        self.messages.save()
 
 
 class TextualHumanAgent(BaseAgent[TextualHumanAgentTools]):
@@ -597,7 +600,7 @@ if App is not None:
             log_tool = self._tools.log
             for channel_id in targets:
                 payload, request_id = self._agent.build_outgoing_payload(channel_id, content)
-                self._tools.channels.send(channel_id, payload)
+                self._tools.messages.send(channel_id, payload)
                 self._agent.record_outgoing(channel_id, payload)
                 channel_name = self._tools.channels.get_channel_name(channel_id)
                 if log_tool is not None:
@@ -640,7 +643,7 @@ if App is not None:
             received = False
             log_tool = self._tools.log
             for _ in range(8):
-                message = self._tools.channels.read()
+                message = self._tools.messages.read()
                 if message is None:
                     break
                 self._agent.register_incoming(message)
