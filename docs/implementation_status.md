@@ -49,6 +49,8 @@
 - [ ] `InputTool` がダミー実装のままで、実運用向けツールは未提供。
 
 ## Documentation / Examples
+- [x] ExecPlan ガイドラインを `docs/meta_plan/exec_plan_guidelines.md` に整備。
+- [x] ワークフロー追加手順を `docs/meta_plan/workflow_addition_guidelines.md` に整備。
 - [ ] ドキュメントはコンセプト草案のみで、API リファレンスや実装ガイドは未整備 (`docs/concept.md`).
 - [x] サンプル実装ガイドラインを整備し、`docs/samples_guideline.md` に方針を集約。
 - [x] LLM 協調サンプルを `samples/llm_delegation.py` として追加し、複数チャネル活用例を提示。
