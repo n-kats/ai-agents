@@ -31,6 +31,7 @@
    - `MessageManager` に `queue_backend`（デフォルトは in-memory）引数を追加し、`write()` で `MessageStoreBackend.enqueue_unread()` を呼び出すように変更する。  
    - `read_for_agent()` ではバックエンドの `dequeue_unread()` を利用して DB 内の未読ポインタを一貫して取り出す。`allowed_channels` フィルタは SQL 側に渡し、残キューをメモリにため込まない。  
    - 既存の `MessageQueue` は `InMemoryMessageStoreBackend` の内部実装として再利用し、テストやライトウェイト環境での挙動を維持する。
+   - 履歴再参照を支援するため、`MessageManager`／`MessageTools` にチャネル ID・メッセージ ID から履歴を読み直す API を追加する。
 4. **テスト整備**  
    - `tests/framework/test_channels.py` に `@pytest.mark.parametrize("backend_type", ["memory", "sqlite"])` のような切り替えを導入し、DB バックエンド時に `MessageManager` へ `SQLMessageStoreBackend` を注入する経路を検証する。  
    - デキュー順序（priority → enqueued_at → id）、チャネル離脱時の未読削除、未読スナップショット再構築（`MessageManager.snapshot_unread_records` が DB バックエンドでも矛盾しない）をテストケースとして増補する。
@@ -68,6 +69,7 @@ UV_PROJECT_ENVIRONMENT=_tmp/codex_venv uv run pytest tests/framework/test_channe
 > - `MessageManager` のバックエンド切り替え実装  
 > - DB バックエンド向けの pytest 追加（`allowed_channels` フィルタ挙動もカバー）  
 > - `channel_unread` の複合インデックス `ix_channel_unread_agent_priority_enqueued_id`
+> - `MessageTools.fetch_message(s)` による既読履歴の再取得
 
 ## インターフェースと依存関係
 - 追加予定 API: `MessageManager` に `backend` or `queue_strategy` 引数を追加し、DB／メモリを選べるようにする。
@@ -88,4 +90,5 @@ UV_PROJECT_ENVIRONMENT=_tmp/codex_venv uv run pytest tests/framework/test_channe
 - 成果: `MessageManager` にバックエンド抽象を導入し、`SQLChannelRepository` 利用時は `SQLMessageQueueBackend` が自動で選択されるようになった。pytest（`tests/framework/test_channels.py`）でインメモリ／SQLite 両方を通し、DB 再起動後も未読が復元されることを確認済み。  
 - 課題: Docker Compose での実行例と Postgres での負荷検証は未整備。可視性タイムアウトやデッドレター行きの扱いも今後の検討事項。  
 - 補足: allowed_channels フィルタの回帰テストと `channel_unread` の複合インデックスを追加し、SQL バックエンドの安定性を検証済み。
+- 補足: 既読後もチャネル履歴を参照できるよう `MessageTools.fetch_message(s)` を追加し、再起動時にメッセージをコンテキストへ取り込めるようにした。
 - 次のアクション: メッセージペイロードのバージョニング戦略やバックプレッシャー制御を別タスクとして検討する。

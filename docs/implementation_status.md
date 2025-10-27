@@ -22,6 +22,7 @@
 - [x] loguru ベースのログ基盤を整備（`configure_logging`・`LogBufferSink`・`LogStream`・`AgentLogTool`・`LogPanelAdapter`）。
 - [x] メッセージ未読キューのデータベース常時永続化とバックエンド切り替え (`docs/exec_plan_message_database.md` 参照)。
   - [x] `channel_unread` に `(agent_id, priority, enqueued_at, id)` 複合インデックスを追加し、allowed_channels フィルタの回帰テストを整備。
+  - [x] `MessageTools.fetch_message(s)` を追加し、既読後の履歴をチャネル ID／メッセージ ID で再取得できるようにした。
 
 ## Tool Injection / Adapter
 - [x] アダプター経由でツールをエージェントへ渡す設計が成立 (`nkaa/framework/agent.py:120`).

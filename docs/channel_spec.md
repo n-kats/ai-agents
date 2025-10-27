@@ -32,6 +32,7 @@
 - `send/send_async` でチャネルへメッセージを投稿し、`read/read_async` で未読を取得する。
 - `save()` で担当エージェントの未読キューをスナップショットとして永続化する（InMemory バックエンドのみ）。SQL バックエンドでは常時 DB に保存されるため no-op。
 - 停止シグナル (`StopMessage`) を含めた協調停止を `read_async` で扱い、`stop_event` 連動によるキャンセルをサポートする。
+- `fetch_message` / `fetch_messages` で既読メッセージをチャネル ID・メッセージ ID から再取得し、再起動後のコンテキスト復元などに活用できる。
 
 ### ChannelRepository (`nkaa/framework/channels/repository.py`)
 - チャネルメタデータ、メッセージ履歴、未読レコード、所属情報を読み書きする抽象層。

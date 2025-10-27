@@ -336,6 +336,16 @@ class MessageManager:
 
         self._queue_backend.discard_agent_channels(agent_id, channel_ids)
 
+    def fetch_message(self, channel_id: str, message_id: int) -> ChannelMessage:
+        """チャネル履歴からメッセージを取得する。既読後に再参照する用途向け。"""
+
+        return self.repository.fetch_message(channel_id, message_id)
+
+    def fetch_messages(self, pointers: Sequence[tuple[str, int]]) -> list[ChannelMessage]:
+        """チャネル ID / メッセージ ID の組からまとめて履歴を取得する。"""
+
+        return [self.repository.fetch_message(channel_id, message_id) for channel_id, message_id in pointers]
+
     # ------------------------------------------------------------------
     # Helpers
     # ------------------------------------------------------------------

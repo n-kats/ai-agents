@@ -201,3 +201,13 @@ class MessageTools(BaseTools):
         """エージェント自身の未読情報スナップショットを取得する。"""
 
         return self.manager.snapshot_unread_records(self.agent_id)
+
+    def fetch_message(self, channel_id: str, message_id: int) -> ChannelMessage:
+        """チャネル履歴から特定メッセージを取得する。"""
+
+        return self.manager.fetch_message(channel_id, message_id)
+
+    def fetch_messages(self, pointers: Sequence[tuple[str, int]]) -> list[ChannelMessage]:
+        """チャネル ID とメッセージ ID の組をまとめて解決する。"""
+
+        return self.manager.fetch_messages(pointers)

@@ -97,6 +97,36 @@ def test_allowed_channels_filter_skips_unmatched_messages(repository_factory: Re
     assert fallback_message.payload == {"text": "nope"}
 
 
+def test_fetch_read_messages_via_tools(repository_factory: RepositoryFactory) -> None:
+    repository = repository_factory()
+    channel_manager, message_manager = _build_managers(repository)
+    channel = channel_manager.create(DatabaseChannelConfig(name="history"))
+
+    publisher_channels = ChannelTools(agent_id="publisher", manager=channel_manager)
+    subscriber_channels = ChannelTools(agent_id="subscriber", manager=channel_manager)
+    publisher_messages = MessageTools(agent_id="publisher", manager=message_manager)
+    subscriber_messages = MessageTools(agent_id="subscriber", manager=message_manager)
+
+    publisher_channels.join(channel.id)
+    subscriber_channels.join(channel.id)
+
+    stored = publisher_messages.send(channel.id, payload={"text": "persisted"})
+    assert stored.message_id is not None
+
+    received = subscriber_messages.read()
+    assert received is not None
+    assert received.message_id == stored.message_id
+
+    history = subscriber_messages.fetch_message(channel.id, stored.message_id)
+    assert history.payload == {"text": "persisted"}
+    assert history.message_id == stored.message_id
+
+    batch = subscriber_messages.fetch_messages([(channel.id, stored.message_id)])
+    assert len(batch) == 1
+    assert batch[0].message_id == stored.message_id
+    assert batch[0].payload == {"text": "persisted"}
+
+
 def test_unread_queue_is_restored_from_repository(repository_factory: RepositoryFactory) -> None:
     repository = repository_factory()
     channel_manager, message_manager = _build_managers(repository)
