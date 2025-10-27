@@ -111,6 +111,8 @@ class MessageTools(BaseTools):
     def save(self) -> None:
         """担当エージェントの未読キューをスナップショットとして永続化する。"""
 
+        if self.manager.queue_is_persistent:
+            return
         current_records = self.manager.snapshot_unread_records(self.agent_id)
         existing_records = self.manager.repository.load_unread_records()
         persisted_records = [record for record in existing_records if record.agent_id != self.agent_id]

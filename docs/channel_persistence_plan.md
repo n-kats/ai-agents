@@ -3,20 +3,19 @@
 > **更新**: SQLAlchemy を利用した `SQLChannelRepository` を `nkaa/framework/channels/repository.py` に追加し、PostgreSQL / SQLite を含む RDBMS 上でチャネル履歴と未読情報を扱えるようになりました。本ドキュメントの設計方針は継続的な改善タスク（一括キュー処理や Docker Compose 化など）を整理する目的で維持しています。
 
 ## ゴール
-- チャンネルのプライマリキューを PostgreSQL で運用し、優先度とタイムスタンプを複合キーとして安定ソートする。
-- Python からは SQLAlchemy あるいは pgmq などのライブラリを用い、`ORDER BY priority, scheduled_at, id` と `FOR UPDATE SKIP LOCKED` を活用した並列デキューを実現する。
+- チャンネルのプライマリキューを PostgreSQL / SQLite の `channel_unread` テーブルで運用し、優先度と投入時刻に `id` を加えた安定ソートでデキューできるようにする（実装済み: `SQLMessageQueueBackend`）。
+- Python からは SQLAlchemy Core/ORM を用い、PostgreSQL では `SELECT ... FOR UPDATE SKIP LOCKED`、SQLite では楽観的ロックで取り出し → `DELETE` する方式を採用する。
 - Docker Compose でデータベース環境を再現し、`.env` から読み込む環境変数でホスト側ディレクトリやポート番号を設定できるようにする（Docker Volume は使用しない）。
 
 ## データモデルの基本設計
-- テーブル名 `channel_messages`（想定）に以下の主なカラムを定義する:
-  - `id SERIAL PRIMARY KEY`
-  - `channel_name TEXT`
-  - `priority INTEGER`
-  - `scheduled_at TIMESTAMPTZ`
-  - `payload JSONB`
-  - `state SMALLINT`（0: ready, 1: processing, 2: done など）
-  - `created_at TIMESTAMPTZ DEFAULT now()`
-- 複合インデックス `CREATE INDEX idx_channel_priority_sched ON channel_messages(priority, scheduled_at, id);` を付与し、優先度→タイムスタンプ→シーケンス順で取得できるようにする。
+- `channel_messages` テーブル  
+  - 主キー: `(channel_id TEXT, message_id INTEGER)`（チャネル内で単調増加）  
+  - カラム: `sender_id TEXT`, `payload JSONB`, `metadata_json JSONB`, `priority INTEGER`, `created_at TIMESTAMPTZ DEFAULT now()`  
+  - チャネルごとの `message_id` 採番は `SQLChannelRepository.persist_message` が担当。
+- `channel_unread` テーブル  
+  - カラム: `id SERIAL PRIMARY KEY`, `agent_id TEXT`, `channel_id TEXT`, `message_id INTEGER`, `priority INTEGER`, `enqueued_at TIMESTAMPTZ DEFAULT now()`  
+  - インデックス: `(agent_id, priority, enqueued_at, id)`（ORM 側で `ORDER BY` して取得。実装では `ix_channel_unread_agent_priority_enqueued_id` として作成）。  
+  - PostgreSQL では `FOR UPDATE SKIP LOCKED` を使い並列デキューを実現。SQLite は単一ワーカー想定で通常の `SELECT` → `DELETE` を行う。
 - 期限前メッセージのスキップや可視性タイムアウトはアプリ層で制御し、再配信・デッドレター処理を今後の拡張ポイントとして残す。
 
 ## Docker ディレクトリ構成
@@ -56,8 +55,9 @@ docker/
 - 共有が必要な値は `.env.example` に記載し、利用者はコピーして `.env` を作成する運用とする。
 
 ## Python 実装メモ
-- SQLAlchemy Core / ORM を推奨。`select(...).order_by(priority, scheduled_at, id).with_for_update(skip_locked=True)` で複数ワーカー対応のデキューが可能。
-- 軽量ラッパとして `pgmq` を採用する場合でも、優先度・タイムスタンプ列はそのまま保持し、複合インデックスを付与する。
+- `MessageManager` はバックエンド抽象を導入し、SQL リポジトリを検出した場合は `SQLMessageQueueBackend` を自動選択して `channel_unread` テーブルへ直接 enqueue/dequeue する。InMemory 構成では `MessageQueue` ベースのバックエンドが従来どおり使用される。
+- SQL バックエンドは SQLAlchemy Core を用い、`select(...).order_by(priority, enqueued_at, id)` で取得後に `delete` する。PostgreSQL のみ `with_for_update(skip_locked=True)` を付与。
+- DB バックエンドでは `MessageTools.save()` が no-op（常時永続化済み）となり、InMemory のみ既存のスナップショット保存を継続する。
 - 接続文字列は環境変数（例: `NKAA_CHANNEL_DATABASE_URL`）にまとめ、Docker Compose のサービス名をホスト名として指定する。
 - 将来的なバックアップやメンテナンス向けに、`VACUUM` / `REINDEX` / バッチ削除タスクをスケジュールできるよう、メンテナンスコマンドのプレイブックを別途整備する。
 

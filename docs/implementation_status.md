@@ -20,6 +20,8 @@
 - [x] メッセージ配送と未読キュー管理を `MessageManager` として独立させ、`ChannelManager` はチャネルメタデータとメンバーシップ管理に専念するよう再構成した。`ChannelManager.leave_agent` からは `MessageManager` 経由で未読ポインタ破棄を呼び出す。
 - [x] `MessageRouteProvider` 抽象を導入し、`MessageManager` をチャネル管理から切り離した。標準構成では `ChannelMessageRouteProvider` を用いて `ChannelManager` を適合させ、将来的なシステム向けルート追加に備える。
 - [x] loguru ベースのログ基盤を整備（`configure_logging`・`LogBufferSink`・`LogStream`・`AgentLogTool`・`LogPanelAdapter`）。
+- [x] メッセージ未読キューのデータベース常時永続化とバックエンド切り替え (`docs/exec_plan_message_database.md` 参照)。
+  - [x] `channel_unread` に `(agent_id, priority, enqueued_at, id)` 複合インデックスを追加し、allowed_channels フィルタの回帰テストを整備。
 
 ## Tool Injection / Adapter
 - [x] アダプター経由でツールをエージェントへ渡す設計が成立 (`nkaa/framework/agent.py:120`).

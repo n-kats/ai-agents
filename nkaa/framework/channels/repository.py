@@ -7,7 +7,7 @@ from collections import defaultdict
 from datetime import datetime
 from typing import Any, Sequence
 
-from sqlalchemy import JSON, DateTime, Integer, String, create_engine, delete, func, select
+from sqlalchemy import JSON, DateTime, Index, Integer, String, create_engine, delete, func, select
 from sqlalchemy.engine import Engine
 from sqlalchemy.orm import DeclarativeBase, Mapped, Session, mapped_column
 
@@ -149,6 +149,15 @@ class _MembershipRow(_SQLBase):
 
 class _UnreadRow(_SQLBase):
     __tablename__ = "channel_unread"
+    __table_args__ = (
+        Index(
+            "ix_channel_unread_agent_priority_enqueued_id",
+            "agent_id",
+            "priority",
+            "enqueued_at",
+            "id",
+        ),
+    )
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
     agent_id: Mapped[str] = mapped_column(String, nullable=False)

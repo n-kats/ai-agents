@@ -67,6 +67,36 @@ def test_channel_roundtrip_via_tools(repository_factory: RepositoryFactory) -> N
     assert message.message_id == stored.message_id
 
 
+def test_allowed_channels_filter_skips_unmatched_messages(repository_factory: RepositoryFactory) -> None:
+    repository = repository_factory()
+    channel_manager, message_manager = _build_managers(repository)
+    allowed_channel = channel_manager.create(DatabaseChannelConfig(name="allowed"))
+    blocked_channel = channel_manager.create(DatabaseChannelConfig(name="blocked"))
+
+    channels = ChannelTools(agent_id="agent-1", manager=channel_manager)
+    messages = MessageTools(agent_id="agent-1", manager=message_manager)
+    channels.join(allowed_channel.id)
+    channels.join(blocked_channel.id)
+
+    messages.send(blocked_channel.id, payload={"text": "nope"})
+
+    # 許可されたチャネルのメッセージが存在しない場合は None を返し、未読は消費しない。
+    assert messages.read(allowed_channels=(allowed_channel.id,)) is None
+
+    messages.send(allowed_channel.id, payload={"text": "hello"})
+
+    allowed_message = messages.read(allowed_channels=(allowed_channel.id,))
+    assert allowed_message is not None
+    assert allowed_message.channel_id == allowed_channel.id
+    assert allowed_message.payload == {"text": "hello"}
+
+    # フィルタなしで読み出すと、保留されていた他チャネルのメッセージが取得できる。
+    fallback_message = messages.read()
+    assert fallback_message is not None
+    assert fallback_message.channel_id == blocked_channel.id
+    assert fallback_message.payload == {"text": "nope"}
+
+
 def test_unread_queue_is_restored_from_repository(repository_factory: RepositoryFactory) -> None:
     repository = repository_factory()
     channel_manager, message_manager = _build_managers(repository)
@@ -184,3 +214,25 @@ def test_channel_tools_async_send_and_read(repository_factory: RepositoryFactory
         assert message.payload == {"text": "async hello"}
 
     asyncio.run(scenario())
+
+
+def test_sql_queue_persists_without_manual_snapshot() -> None:
+    repository = _sqlite_repository_factory()
+    channel_manager, message_manager = _build_managers(repository)
+    channel = channel_manager.create(DatabaseChannelConfig(name="sql-backend"))
+
+    sender_channels = ChannelTools(agent_id="sender", manager=channel_manager)
+    receiver_channels = ChannelTools(agent_id="receiver", manager=channel_manager)
+    sender_messages = MessageTools(agent_id="sender", manager=message_manager)
+    receiver_messages = MessageTools(agent_id="receiver", manager=message_manager)
+
+    sender_channels.join(channel.id)
+    receiver_channels.join(channel.id)
+
+    sender_messages.send(channel.id, payload={"text": "db-backed"})
+
+    restored_channel_manager, restored_message_manager = _build_managers(repository)
+    restored_message = restored_message_manager.read_for_agent("receiver")
+
+    assert restored_message is not None
+    assert restored_message.payload == {"text": "db-backed"}

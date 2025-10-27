@@ -17,8 +17,8 @@
 * `ChannelManager` がチャネル生成・メンバ管理・未読キュー復元までまとめて担当。
 * `ChannelTools` 経由で `join/leave/send/read/list_channels` を呼ぶ。
 * メッセージ本体は `ChannelMessage`。payload は JSON ライクな任意構造。
-* 未読は `MessageQueue`（中身は `AgentMessagePointer`）で管理。優先度＆投入時刻で順序維持。
-* 永続化は `ChannelRepository` 抽象に委譲。今は `InMemoryChannelRepository` が標準。PostgreSQL 実装は TODO。
+* 未読はバックエンド切り替え可能な `MessageQueue` で管理。`SQLChannelRepository` を利用する構成では `channel_unread` テーブルへ直接書き込み、`SQLMessageQueueBackend` が優先度＋投入時刻順で `SELECT ... ORDER BY priority, enqueued_at, id` しつつ削除する。`channel_unread` には `(agent_id, priority, enqueued_at, id)` の複合インデックスを貼り、allowed_channels フィルタ込みでも安定ソートを維持する。InMemory 構成では従来どおりプロセス内の `MessageQueue` がフォールバック。
+* 永続化は `ChannelRepository` 抽象に委譲。`InMemoryChannelRepository`／`SQLChannelRepository` を切り替え可能で、PostgreSQL / SQLite でも `channel_messages`・`channel_unread` テーブルを `create_all` 済み。
 
 # 管理機構（オーケストレーション）
 * `StandardManager` がエージェント設定ファイルを読み込み → `AgentConfig` へパース → `build()` 呼び出し。

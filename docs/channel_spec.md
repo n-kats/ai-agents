@@ -14,7 +14,7 @@
 - 未読キューを扱うハンドラを外部から受け取り、離脱時に `attach_unread_handler` 経由で未読ポインタ破棄を委譲する。
 
 ### MessageManager (`nkaa/framework/message_manager.py`)
-- メッセージ書き込み時に履歴を保存し、各エージェント専用キューへメッセージ ID と優先度を投入する。
+- メッセージ書き込み時に履歴を保存し、各エージェント専用キューへメッセージ ID と優先度を投入する（バックエンドは InMemory / SQL を自動選択）。
 - `read_for_agent` で未読キューからポインタを取り出し、リポジトリからメッセージ本体を解決する。
 - 未読スナップショット (`snapshot_unread_records`) を提供し、クラッシュ復旧向けのエクスポート／インポート処理を担う。
 - エージェント離脱時に `discard_agent_channels` を用いて該当チャネルのポインタを破棄する。
@@ -30,7 +30,7 @@
 ### MessageTools (`nkaa/framework/tools.py`)
 - メッセージの送受信・未読スナップショット保存を `MessageManager` 経由で提供するツール。
 - `send/send_async` でチャネルへメッセージを投稿し、`read/read_async` で未読を取得する。
-- `save()` で担当エージェントの未読キューをスナップショットとして永続化する。既存スナップショットから自身のレコードだけを差し替えるため、他エージェントの未読状態を維持できる。
+- `save()` で担当エージェントの未読キューをスナップショットとして永続化する（InMemory バックエンドのみ）。SQL バックエンドでは常時 DB に保存されるため no-op。
 - 停止シグナル (`StopMessage`) を含めた協調停止を `read_async` で扱い、`stop_event` 連動によるキャンセルをサポートする。
 
 ### ChannelRepository (`nkaa/framework/channels/repository.py`)
@@ -39,9 +39,9 @@
 - `persist_message` は永続層で採番した `message_id` を返却し、`ChannelManager` 側での未読管理に利用する。
 
 ### MessageQueue (`nkaa/framework/channels/queue.py`)
-- 各エージェント専用の優先度付きキュー実装。
+- 各エージェント専用の優先度付きキュー実装。InMemory バックエンドでは `MessageQueue` がそのまま利用され、SQL バックエンドでは `channel_unread` テーブルが永続キューとして機能する。
 - キュー要素はメッセージ本体ではなく `AgentMessagePointer`（チャネル ID、メッセージ ID、優先度、投入時刻）であり、履歴取得はリポジトリ経由で行う。
-- チャネルフィルタリング、未読スナップショット取得、チャネル離脱時の破棄操作をサポートする。
+- チャネルフィルタリング、未読スナップショット取得、チャネル離脱時の破棄操作をサポートする。SQL バックエンドでは `ORDER BY priority, enqueued_at, id` で取得し、取得と同時に行を削除する。
 
 ## 決定済みの仕様
 - メッセージ履歴はデータベース（PostgreSQL を想定）に保存し、チャネル本体は `ChannelRepository` を通じて永続化操作を行う。
