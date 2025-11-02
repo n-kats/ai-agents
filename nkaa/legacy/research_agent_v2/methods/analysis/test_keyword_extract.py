@@ -9,13 +9,13 @@ from unittest.mock import MagicMock, patch
 from langchain_core.language_models import BaseChatModel
 
 # インポートを有効化
-from nkaa.research_agent_v2.methods.analysis.keyword_extract import KeywordExtractMethod
+from nkaa.legacy.research_agent_v2.methods.analysis.keyword_extract import KeywordExtractMethod
 
 
 class TestKeywordExtractMethod(unittest.TestCase):
     """methods.analysis.keyword_extract.KeywordExtractMethod のテストクラス."""
 
-    @patch("nkaa.research_agent_v2.utils.prompt_loader.load_prompt_template")  # プロンプト読み込みもモック
+    @patch("nkaa.legacy.research_agent_v2.utils.prompt_loader.load_prompt_template")  # プロンプト読み込みもモック
     def setUp(self, mock_load_prompt):
         """テスト前のセットアップ."""
         mock_load_prompt.return_value = 'キーワード抽出プロンプト {{ num_keywords }}: "{{ text }}"'  # ダミープロンプト

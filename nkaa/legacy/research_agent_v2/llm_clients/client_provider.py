@@ -10,7 +10,7 @@ from langchain_openai import ChatOpenAI
 from pydantic import SecretStr
 
 # LLMSettings ではなく Settings 全体を使うように変更
-from nkaa.research_agent_v2.config.settings import (  # LLMSettings もインポート
+from nkaa.legacy.research_agent_v2.config.settings import (  # LLMSettings もインポート
     Settings,
 )
 

@@ -1,11 +1,11 @@
 import logging
 from typing import Any, Dict, List, Sequence
 
-from nkaa.research_agent_v2.methods.base_method import BaseSearchMethod
-from nkaa.research_agent_v2.nodes.base_node import BaseNode
-from nkaa.research_agent_v2.state import AgentState
+from nkaa.legacy.research_agent_v2.methods.base_method import BaseSearchMethod
+from nkaa.legacy.research_agent_v2.nodes.base_node import BaseNode
+from nkaa.legacy.research_agent_v2.state import AgentState
 
-# from nkaa.research_agent_v2.config.settings import Settings # DIで渡される想定
+# from nkaa.legacy.research_agent_v2.config.settings import Settings # DIで渡される想定
 
 logger = logging.getLogger(__name__)
 

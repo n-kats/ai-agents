@@ -8,8 +8,8 @@ from unittest.mock import MagicMock, patch
 from langchain_core.language_models import BaseChatModel
 
 # インポートを有効化
-from nkaa.research_agent_v2.nodes.final_check import FinalCheckNode
-from nkaa.research_agent_v2.state import AgentState, StructuredError
+from nkaa.legacy.research_agent_v2.nodes.final_check import FinalCheckNode
+from nkaa.legacy.research_agent_v2.state import AgentState, StructuredError
 
 
 class TestFinalCheckNode(unittest.TestCase):
@@ -17,7 +17,7 @@ class TestFinalCheckNode(unittest.TestCase):
 
     def setUp(self):
         """テスト前のセットアップ."""
-        patcher = patch("nkaa.research_agent_v2.utils.prompt_loader.load_prompt_template")
+        patcher = patch("nkaa.legacy.research_agent_v2.utils.prompt_loader.load_prompt_template")
         self.mock_load_prompt = patcher.start()
         self.addCleanup(patcher.stop)
         self.mock_load_prompt.return_value = "チェックプロンプト: {query} {report}"
@@ -48,8 +48,8 @@ class TestFinalCheckNode(unittest.TestCase):
             "replan_attempts": 0,
         }
 
-    @patch("nkaa.research_agent_v2.nodes.final_check.ChatPromptTemplate")  # チェーン構築を阻止
-    @patch("nkaa.research_agent_v2.nodes.final_check.BooleanOutputParser")
+    @patch("nkaa.legacy.research_agent_v2.nodes.final_check.ChatPromptTemplate")  # チェーン構築を阻止
+    @patch("nkaa.legacy.research_agent_v2.nodes.final_check.BooleanOutputParser")
     def test_final_check_node_call_passed(self, mock_parser_cls, mock_prompt_cls):
         """FinalCheckNode の __call__ メソッド (チェック通過) のテスト."""
         initial_state = self._get_initial_state(report="Good report", query="test query")
@@ -90,8 +90,8 @@ class TestFinalCheckNode(unittest.TestCase):
             self.assertFalse(result_state["replan_needed"])
             self.assertIsNone(result_state["error_info"])
 
-    @patch("nkaa.research_agent_v2.nodes.final_check.ChatPromptTemplate")
-    @patch("nkaa.research_agent_v2.nodes.final_check.BooleanOutputParser")
+    @patch("nkaa.legacy.research_agent_v2.nodes.final_check.ChatPromptTemplate")
+    @patch("nkaa.legacy.research_agent_v2.nodes.final_check.BooleanOutputParser")
     def test_final_check_node_call_failed(self, mock_parser_cls, mock_prompt_cls):
         """FinalCheckNode の __call__ メソッド (チェック失敗) のテスト."""
         initial_state = self._get_initial_state(report="Bad report", query="test query")
@@ -111,8 +111,8 @@ class TestFinalCheckNode(unittest.TestCase):
         self.assertTrue(result_state["replan_needed"])
         self.assertIsNone(result_state["error_info"])
 
-    @patch("nkaa.research_agent_v2.nodes.final_check.ChatPromptTemplate")
-    @patch("nkaa.research_agent_v2.nodes.final_check.BooleanOutputParser")
+    @patch("nkaa.legacy.research_agent_v2.nodes.final_check.ChatPromptTemplate")
+    @patch("nkaa.legacy.research_agent_v2.nodes.final_check.BooleanOutputParser")
     def test_final_check_node_error_handling(self, mock_parser_cls, mock_prompt_cls):
         """LLM呼び出しでエラーが発生した場合のテスト."""
         initial_state = self._get_initial_state()
@@ -131,8 +131,8 @@ class TestFinalCheckNode(unittest.TestCase):
         self.assertEqual(result_state["error_info"].error_code, "CheckError")
         self.assertIn(error_message, result_state["error_info"].message)
 
-    @patch("nkaa.research_agent_v2.nodes.final_check.ChatPromptTemplate")
-    @patch("nkaa.research_agent_v2.nodes.final_check.BooleanOutputParser")
+    @patch("nkaa.legacy.research_agent_v2.nodes.final_check.ChatPromptTemplate")
+    @patch("nkaa.legacy.research_agent_v2.nodes.final_check.BooleanOutputParser")
     def test_final_check_node_parse_error(self, mock_parser_cls, mock_prompt_cls):
         """LLM応答のパースエラー (ValueError) が発生した場合のテスト."""
         initial_state = self._get_initial_state()

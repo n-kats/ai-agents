@@ -6,7 +6,7 @@ import unittest
 from unittest.mock import call, mock_open, patch  # call をインポート
 
 # インポートを有効化
-from nkaa.research_agent_v2.methods.search.local_search import LocalSearchMethod
+from nkaa.legacy.research_agent_v2.methods.search.local_search import LocalSearchMethod
 
 
 class TestLocalSearchMethod(unittest.TestCase):

@@ -3,12 +3,12 @@ from typing import Literal
 
 from langgraph.graph import END, StateGraph
 
-from nkaa.research_agent_v2.config.settings import Settings  # 設定をインポート
-from nkaa.research_agent_v2.nodes.analysis_synthesis import AnalysisSynthesisNode
-from nkaa.research_agent_v2.nodes.data_gathering import DataGatheringNode
-from nkaa.research_agent_v2.nodes.final_check import FinalCheckNode
-from nkaa.research_agent_v2.nodes.replan import ReplanNode
-from nkaa.research_agent_v2.state import AgentState
+from nkaa.legacy.research_agent_v2.config.settings import Settings  # 設定をインポート
+from nkaa.legacy.research_agent_v2.nodes.analysis_synthesis import AnalysisSynthesisNode
+from nkaa.legacy.research_agent_v2.nodes.data_gathering import DataGatheringNode
+from nkaa.legacy.research_agent_v2.nodes.final_check import FinalCheckNode
+from nkaa.legacy.research_agent_v2.nodes.replan import ReplanNode
+from nkaa.legacy.research_agent_v2.state import AgentState
 
 logger = logging.getLogger(__name__)
 

@@ -8,10 +8,10 @@ from unittest.mock import mock_open, patch
 
 from pydantic import SecretStr, ValidationError
 
-from nkaa.research_agent_v2.config import (
+from nkaa.legacy.research_agent_v2.config import (
     settings as settings_module,  # キャッシュクリア用
 )
-from nkaa.research_agent_v2.config.settings import (  # インポートを有効化
+from nkaa.legacy.research_agent_v2.config.settings import (  # インポートを有効化
     KeywordExtractConfig,
     KeywordExtractSettings,
     LLMSettings,

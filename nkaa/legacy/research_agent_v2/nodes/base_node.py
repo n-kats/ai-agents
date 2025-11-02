@@ -4,8 +4,8 @@ import abc
 from typing import TYPE_CHECKING, Any, Dict
 
 if TYPE_CHECKING:
-    from nkaa.research_agent_v2.state import AgentState
-    # from nkaa.research_agent_v2.config.settings import Settings # 設定モデル (未作成)
+    from nkaa.legacy.research_agent_v2.state import AgentState
+    # from nkaa.legacy.research_agent_v2.config.settings import Settings # 設定モデル (未作成)
     # from langchain_core.language_models import BaseChatModel # LLM クライアント (未作成)
 
 
@@ -71,7 +71,7 @@ class BaseNode(abc.ABC):
         Returns:
             エラー情報を追加した AgentState。
         """
-        from nkaa.research_agent_v2.state import StructuredError  # 実行時インポート
+        from nkaa.legacy.research_agent_v2.state import StructuredError  # 実行時インポート
 
         # 例外情報をログに出力するなどの処理を追加可能
         if exception:

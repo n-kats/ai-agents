@@ -7,14 +7,14 @@ from unittest.mock import mock_open, patch
 
 # jinja2 のインポートは不要になった
 # インポートを有効化
-from nkaa.research_agent_v2.utils.prompt_loader import load_prompt_template
+from nkaa.legacy.research_agent_v2.utils.prompt_loader import load_prompt_template
 
 # モック用の Path オブジェクト
 MOCK_PROMPTS_PATH = Path("/mock/prompts/dir")
 
 
 # PROMPTS_DIR を Path オブジェクトでモック (クラスデコレータとして適用)
-@patch("nkaa.research_agent_v2.utils.prompt_loader.PROMPTS_DIR", new=MOCK_PROMPTS_PATH)
+@patch("nkaa.legacy.research_agent_v2.utils.prompt_loader.PROMPTS_DIR", new=MOCK_PROMPTS_PATH)
 class TestPromptLoader(unittest.TestCase):
     """utils.prompt_loader の load_prompt_template 関数のテストクラス."""
 

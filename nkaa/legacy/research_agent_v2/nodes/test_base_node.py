@@ -5,8 +5,8 @@ import unittest
 from unittest.mock import patch
 
 # インポートを有効化
-from nkaa.research_agent_v2.nodes.base_node import BaseNode
-from nkaa.research_agent_v2.state import AgentState, StructuredError
+from nkaa.legacy.research_agent_v2.nodes.base_node import BaseNode
+from nkaa.legacy.research_agent_v2.state import AgentState, StructuredError
 
 
 # --- テスト用具象クラス ---

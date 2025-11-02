@@ -4,7 +4,7 @@ from typing import Any, Dict, List
 # AgentState をインポート (将来的にメソッドが State 全体を参照する必要がある場合に備える)
 # from typing import TYPE_CHECKING
 # if TYPE_CHECKING:
-#     from nkaa.research_agent_v2.state import AgentState
+#     from nkaa.legacy.research_agent_v2.state import AgentState
 
 
 class BaseSearchMethod(abc.ABC):

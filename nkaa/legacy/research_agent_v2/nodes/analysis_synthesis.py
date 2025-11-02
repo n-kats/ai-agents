@@ -5,12 +5,12 @@ from langchain_core.language_models import BaseChatModel
 from langchain_core.output_parsers import StrOutputParser
 from langchain_core.prompts import ChatPromptTemplate
 
-from nkaa.research_agent_v2.methods.base_method import BaseAnalysisMethod
-from nkaa.research_agent_v2.nodes.base_node import BaseNode
-from nkaa.research_agent_v2.state import AgentState
-from nkaa.research_agent_v2.utils.prompt_loader import load_prompt_template
+from nkaa.legacy.research_agent_v2.methods.base_method import BaseAnalysisMethod
+from nkaa.legacy.research_agent_v2.nodes.base_node import BaseNode
+from nkaa.legacy.research_agent_v2.state import AgentState
+from nkaa.legacy.research_agent_v2.utils.prompt_loader import load_prompt_template
 
-# from nkaa.research_agent_v2.config.settings import Settings # DIで渡される想定
+# from nkaa.legacy.research_agent_v2.config.settings import Settings # DIで渡される想定
 
 logger = logging.getLogger(__name__)
 

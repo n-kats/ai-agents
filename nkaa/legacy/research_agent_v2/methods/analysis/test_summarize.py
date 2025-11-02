@@ -10,7 +10,7 @@ from langchain_core.documents import Document
 from langchain_core.language_models import BaseChatModel
 
 # インポートを有効化
-from nkaa.research_agent_v2.methods.analysis.summarize import SummarizeMethod
+from nkaa.legacy.research_agent_v2.methods.analysis.summarize import SummarizeMethod
 
 
 class TestSummarizeMethod(unittest.TestCase):
@@ -18,9 +18,9 @@ class TestSummarizeMethod(unittest.TestCase):
 
     # setUp メソッドに直接デコレータを適用する
     @patch(
-        "nkaa.research_agent_v2.methods.analysis.summarize.load_summarize_chain"
+        "nkaa.legacy.research_agent_v2.methods.analysis.summarize.load_summarize_chain"
     )  # 外側 -> 第2引数 (mock_load_chain)
-    @patch("nkaa.research_agent_v2.utils.prompt_loader.load_prompt_template")  # 内側 -> 第1引数 (mock_load_prompt)
+    @patch("nkaa.legacy.research_agent_v2.utils.prompt_loader.load_prompt_template")  # 内側 -> 第1引数 (mock_load_prompt)
     def setUp(self, mock_load_prompt, mock_load_chain):
         """テスト前のセットアップ."""
         mock_load_prompt.side_effect = lambda name: f"Mock {name} content"  # ダミープロンプト内容

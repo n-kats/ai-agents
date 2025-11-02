@@ -6,22 +6,22 @@ from unittest.mock import ANY, MagicMock, patch  # ANY をインポート
 
 from langgraph.graph import StateGraph  # StateGraph をインポート
 
-from nkaa.research_agent_v2.config.settings import Settings
+from nkaa.legacy.research_agent_v2.config.settings import Settings
 
 # main 内の関数やクラスをインポート
-from nkaa.research_agent_v2.main import run_agent
-from nkaa.research_agent_v2.state import AgentState, StructuredError
+from nkaa.legacy.research_agent_v2.main import run_agent
+from nkaa.legacy.research_agent_v2.state import AgentState, StructuredError
 
 
 # run_agent 内で呼ばれる関数をまとめてモック
-@patch("nkaa.research_agent_v2.main.load_settings")
-@patch("nkaa.research_agent_v2.main.setup_logging")
-@patch("nkaa.research_agent_v2.main.get_llm_client")
-@patch("nkaa.research_agent_v2.main.instantiate_search_methods")
-@patch("nkaa.research_agent_v2.main.instantiate_analysis_methods")
-@patch("nkaa.research_agent_v2.main.build_graph")
+@patch("nkaa.legacy.research_agent_v2.main.load_settings")
+@patch("nkaa.legacy.research_agent_v2.main.setup_logging")
+@patch("nkaa.legacy.research_agent_v2.main.get_llm_client")
+@patch("nkaa.legacy.research_agent_v2.main.instantiate_search_methods")
+@patch("nkaa.legacy.research_agent_v2.main.instantiate_analysis_methods")
+@patch("nkaa.legacy.research_agent_v2.main.build_graph")
 @patch("langgraph.graph.StateGraph.compile")  # graph.compile をモック
-@patch("nkaa.research_agent_v2.main.uuid.uuid4")  # uuid4 をモック
+@patch("nkaa.legacy.research_agent_v2.main.uuid.uuid4")  # uuid4 をモック
 @patch("builtins.print")  # print 出力を抑制・検証
 class TestRunAgent(unittest.TestCase):
     """main.py の run_agent 関数のテストクラス."""

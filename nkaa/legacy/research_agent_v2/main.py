@@ -14,34 +14,34 @@ from langchain_core.runnables import RunnableConfig
 # from langgraph.graph import CompiledGraph # 不要になった
 from langgraph.checkpoint.memory import MemorySaver  # 追加
 
-from nkaa.research_agent_v2.config.settings import (
+from nkaa.legacy.research_agent_v2.config.settings import (
     AnyAnalysisMethodConfig,  # 修正: 新しい Union 型名
     AnySearchMethodConfig,  # 修正: 新しい Union 型名
     Settings,
     load_settings,
 )
-from nkaa.research_agent_v2.graph import build_graph
-from nkaa.research_agent_v2.llm_clients.client_provider import get_llm_client
-from nkaa.research_agent_v2.methods.analysis import (
+from nkaa.legacy.research_agent_v2.graph import build_graph
+from nkaa.legacy.research_agent_v2.llm_clients.client_provider import get_llm_client
+from nkaa.legacy.research_agent_v2.methods.analysis import (
     KeywordExtractMethod,
     SummarizeMethod,
 )
-from nkaa.research_agent_v2.methods.base_method import (
+from nkaa.legacy.research_agent_v2.methods.base_method import (
     BaseAnalysisMethod,
     BaseSearchMethod,
 )
 
 # --- Method Implementations ---
 # 検索メソッドをインポート
-from nkaa.research_agent_v2.methods.search import (
+from nkaa.legacy.research_agent_v2.methods.search import (
     LocalSearchMethod,  # 実装した LocalSearchMethod をインポート
     WebSearchMethod,
 )
-from nkaa.research_agent_v2.nodes.analysis_synthesis import AnalysisSynthesisNode
-from nkaa.research_agent_v2.nodes.data_gathering import DataGatheringNode
-from nkaa.research_agent_v2.nodes.final_check import FinalCheckNode
-from nkaa.research_agent_v2.nodes.replan import ReplanNode
-from nkaa.research_agent_v2.state import AgentState
+from nkaa.legacy.research_agent_v2.nodes.analysis_synthesis import AnalysisSynthesisNode
+from nkaa.legacy.research_agent_v2.nodes.data_gathering import DataGatheringNode
+from nkaa.legacy.research_agent_v2.nodes.final_check import FinalCheckNode
+from nkaa.legacy.research_agent_v2.nodes.replan import ReplanNode
+from nkaa.legacy.research_agent_v2.state import AgentState
 
 # Placeholder は不要になったためコメントアウトまたは削除
 # class PlaceholderSearchMethod(BaseSearchMethod): ...

@@ -3,7 +3,7 @@ import logging
 import os
 from typing import Any, Dict, List
 
-from nkaa.research_agent_v2.methods.base_method import BaseSearchMethod
+from nkaa.legacy.research_agent_v2.methods.base_method import BaseSearchMethod
 
 # ResearchState はこのファイルでは使用されていないため、インポートは不要
 

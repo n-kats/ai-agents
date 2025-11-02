@@ -7,11 +7,11 @@ from unittest.mock import MagicMock, patch  # ANY をインポート
 # BaseChatModel, BaseAnalysisMethod をインポート
 from langchain_core.language_models import BaseChatModel
 
-from nkaa.research_agent_v2.methods.base_method import BaseAnalysisMethod
+from nkaa.legacy.research_agent_v2.methods.base_method import BaseAnalysisMethod
 
 # インポートを有効化
-from nkaa.research_agent_v2.nodes.analysis_synthesis import AnalysisSynthesisNode
-from nkaa.research_agent_v2.state import AgentState, StructuredError
+from nkaa.legacy.research_agent_v2.nodes.analysis_synthesis import AnalysisSynthesisNode
+from nkaa.legacy.research_agent_v2.state import AgentState, StructuredError
 
 
 class TestAnalysisSynthesisNode(unittest.TestCase):
@@ -19,7 +19,7 @@ class TestAnalysisSynthesisNode(unittest.TestCase):
 
     def setUp(self):
         """テスト前のセットアップ."""
-        patcher = patch("nkaa.research_agent_v2.utils.prompt_loader.load_prompt_template")
+        patcher = patch("nkaa.legacy.research_agent_v2.utils.prompt_loader.load_prompt_template")
         self.addCleanup(patcher.stop)
         self.mock_load_prompt = patcher.start()
         self.mock_load_prompt.return_value = "合成プロンプト: {query} {analysis_results} {search_results_summary}"

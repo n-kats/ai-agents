@@ -6,17 +6,17 @@ from unittest.mock import MagicMock
 
 from langgraph.graph import END, StateGraph
 
-from nkaa.research_agent_v2.config.settings import Settings  # Settings をインポート
+from nkaa.legacy.research_agent_v2.config.settings import Settings  # Settings をインポート
 
 # インポートを有効化
-from nkaa.research_agent_v2.graph import build_graph, create_should_replan_condition
-from nkaa.research_agent_v2.nodes.analysis_synthesis import AnalysisSynthesisNode
+from nkaa.legacy.research_agent_v2.graph import build_graph, create_should_replan_condition
+from nkaa.legacy.research_agent_v2.nodes.analysis_synthesis import AnalysisSynthesisNode
 
 # ノードクラスもインポート (型ヒントや node_name 参照用)
-from nkaa.research_agent_v2.nodes.data_gathering import DataGatheringNode
-from nkaa.research_agent_v2.nodes.final_check import FinalCheckNode
-from nkaa.research_agent_v2.nodes.replan import ReplanNode
-from nkaa.research_agent_v2.state import AgentState, StructuredError
+from nkaa.legacy.research_agent_v2.nodes.data_gathering import DataGatheringNode
+from nkaa.legacy.research_agent_v2.nodes.final_check import FinalCheckNode
+from nkaa.legacy.research_agent_v2.nodes.replan import ReplanNode
+from nkaa.legacy.research_agent_v2.state import AgentState, StructuredError
 
 
 class TestGraphBuilding(unittest.TestCase):

@@ -4,8 +4,8 @@ from typing import Any, Dict, List, Optional
 
 from langchain_community.tools.tavily_search import TavilySearchResults
 
-from nkaa.research_agent_v2.config.settings import WebSearchSettings
-from nkaa.research_agent_v2.methods.base_method import BaseSearchMethod
+from nkaa.legacy.research_agent_v2.config.settings import WebSearchSettings
+from nkaa.legacy.research_agent_v2.methods.base_method import BaseSearchMethod
 
 logger = logging.getLogger(__name__)
 

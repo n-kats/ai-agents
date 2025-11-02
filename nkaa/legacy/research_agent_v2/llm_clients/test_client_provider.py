@@ -10,11 +10,11 @@ from langchain_core.language_models import BaseChatModel  # 追加
 from langchain_openai import ChatOpenAI
 from pydantic import SecretStr
 
-from nkaa.research_agent_v2.config.settings import LLMSettings, Settings
-from nkaa.research_agent_v2.llm_clients import client_provider  # モジュールをインポート
+from nkaa.legacy.research_agent_v2.config.settings import LLMSettings, Settings
+from nkaa.legacy.research_agent_v2.llm_clients import client_provider  # モジュールをインポート
 
 # get_llm_client の直接インポートを削除
-from nkaa.research_agent_v2.llm_clients.client_provider import (
+from nkaa.legacy.research_agent_v2.llm_clients.client_provider import (
     _llm_client_cache,
 )  # get_llm_client を削除
 
@@ -27,7 +27,7 @@ class TestClientProvider(unittest.TestCase):
         _llm_client_cache.clear()
 
     # パッチの対象を client_provider モジュール内の名前に変更
-    @patch("nkaa.research_agent_v2.llm_clients.client_provider.ChatOpenAI")
+    @patch("nkaa.legacy.research_agent_v2.llm_clients.client_provider.ChatOpenAI")
     def test_get_llm_client_openai(self, mock_chat_openai):
         """OpenAIクライアントが正しく取得され、キャッシュされるかのテスト."""
         mock_instance = MagicMock(spec=ChatOpenAI)
@@ -56,7 +56,7 @@ class TestClientProvider(unittest.TestCase):
         self.assertEqual(client1, client2)  # 同じインスタンスが返る
 
     # 関数自体をモックするアプローチに変更
-    @patch("nkaa.research_agent_v2.llm_clients.client_provider.get_llm_client")
+    @patch("nkaa.legacy.research_agent_v2.llm_clients.client_provider.get_llm_client")
     def test_get_llm_client_anthropic(self, mock_get_llm_client):
         """Anthropicクライアントが正しく取得されるかのテスト (関数自体をモック)."""
         # ダミーの戻り値を設定
@@ -89,7 +89,7 @@ class TestClientProvider(unittest.TestCase):
         # self.assertEqual(client1, client2) # キャッシュ有効時のテスト
 
     # 関数自体をモックするアプローチに変更
-    @patch("nkaa.research_agent_v2.llm_clients.client_provider.get_llm_client")
+    @patch("nkaa.legacy.research_agent_v2.llm_clients.client_provider.get_llm_client")
     def test_get_llm_client_ollama(self, mock_get_llm_client):
         """Ollamaクライアントが正しく取得されるかのテスト (関数自体をモック)."""
         # ダミーの戻り値を設定
@@ -109,7 +109,7 @@ class TestClientProvider(unittest.TestCase):
         # キャッシュのテストは別途必要
 
     # 関数自体をモックするアプローチに変更
-    @patch("nkaa.research_agent_v2.llm_clients.client_provider.get_llm_client")
+    @patch("nkaa.legacy.research_agent_v2.llm_clients.client_provider.get_llm_client")
     def test_get_llm_client_unsupported_provider(self, mock_get_llm_client):
         """サポートされていないプロバイダーが指定された場合のテスト (関数自体をモック)."""
         # get_llm_client が ValueError を送出するように設定
@@ -125,7 +125,7 @@ class TestClientProvider(unittest.TestCase):
         mock_get_llm_client.assert_called_once_with(settings)
 
     # @patch.dict(os.environ, {}, clear=True) # 環境変数のパッチは不要になる
-    @patch("nkaa.research_agent_v2.llm_clients.client_provider.get_llm_client")
+    @patch("nkaa.legacy.research_agent_v2.llm_clients.client_provider.get_llm_client")
     def test_get_llm_client_missing_api_key_openai(self, mock_get_llm_client):
         """OpenAI で API キーがない場合に ValueError が発生するかのテスト (関数自体をモック)."""
         # get_llm_client が ValueError を送出するように設定
@@ -146,7 +146,7 @@ class TestClientProvider(unittest.TestCase):
         mock_get_llm_client.assert_called_once_with(settings)
 
     # @patch.dict(os.environ, {}, clear=True) # 不要
-    @patch("nkaa.research_agent_v2.llm_clients.client_provider.get_llm_client")
+    @patch("nkaa.legacy.research_agent_v2.llm_clients.client_provider.get_llm_client")
     def test_get_llm_client_missing_api_key_anthropic(self, mock_get_llm_client):
         """Anthropic で API キーがない場合に ValueError が発生するかのテスト (関数自体をモック)."""
         # get_llm_client が ValueError を送出するように設定

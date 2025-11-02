@@ -8,11 +8,11 @@ from unittest.mock import MagicMock, patch  # ANY をインポート
 from langchain_core.language_models import BaseChatModel
 
 # インポートを有効化
-from nkaa.research_agent_v2.nodes.replan import ReplanNode
-from nkaa.research_agent_v2.state import AgentState, StructuredError
+from nkaa.legacy.research_agent_v2.nodes.replan import ReplanNode
+from nkaa.legacy.research_agent_v2.state import AgentState, StructuredError
 
 
-@patch("nkaa.research_agent_v2.utils.prompt_loader.load_prompt_template")
+@patch("nkaa.legacy.research_agent_v2.utils.prompt_loader.load_prompt_template")
 class TestReplanNode(unittest.TestCase):
     """nodes.replan.ReplanNode のテストクラス."""
 

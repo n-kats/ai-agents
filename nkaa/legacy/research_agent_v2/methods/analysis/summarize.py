@@ -12,9 +12,9 @@ from langchain_core.language_models import BaseChatModel
 from langchain_core.prompts import PromptTemplate
 from langchain_text_splitters import RecursiveCharacterTextSplitter
 
-from nkaa.research_agent_v2.config.settings import SummarizeSettings
-from nkaa.research_agent_v2.methods.base_method import BaseAnalysisMethod
-from nkaa.research_agent_v2.utils.prompt_loader import load_prompt_template
+from nkaa.legacy.research_agent_v2.config.settings import SummarizeSettings
+from nkaa.legacy.research_agent_v2.methods.base_method import BaseAnalysisMethod
+from nkaa.legacy.research_agent_v2.utils.prompt_loader import load_prompt_template
 
 logger = logging.getLogger(__name__)
 

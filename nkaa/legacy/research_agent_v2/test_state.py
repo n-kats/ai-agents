@@ -5,7 +5,7 @@ import unittest
 
 from pydantic import ValidationError  # バリデーションエラーテスト用
 
-from nkaa.research_agent_v2.state import (  # インポートを有効化
+from nkaa.legacy.research_agent_v2.state import (  # インポートを有効化
     AgentState,
     StructuredError,
 )

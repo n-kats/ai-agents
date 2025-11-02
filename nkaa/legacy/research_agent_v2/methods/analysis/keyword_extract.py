@@ -10,9 +10,9 @@ from langchain_core.prompts import PromptTemplate
 # RunnableSerializable をインポート
 from langchain_core.runnables import RunnableSerializable
 
-from nkaa.research_agent_v2.config.settings import KeywordExtractSettings
-from nkaa.research_agent_v2.methods.base_method import BaseAnalysisMethod
-from nkaa.research_agent_v2.utils.prompt_loader import load_prompt_template
+from nkaa.legacy.research_agent_v2.config.settings import KeywordExtractSettings
+from nkaa.legacy.research_agent_v2.methods.base_method import BaseAnalysisMethod
+from nkaa.legacy.research_agent_v2.utils.prompt_loader import load_prompt_template
 
 logger = logging.getLogger(__name__)
 

@@ -3,7 +3,7 @@
 
 import unittest
 
-# from nkaa.research_agent_v2.methods.base_method import BaseSearchMethod, BaseAnalysisMethod # 必要に応じてインポート
+# from nkaa.legacy.research_agent_v2.methods.base_method import BaseSearchMethod, BaseAnalysisMethod # 必要に応じてインポート
 
 
 # テスト用の具象クラス (BaseSearchMethod が抽象クラスの場合)

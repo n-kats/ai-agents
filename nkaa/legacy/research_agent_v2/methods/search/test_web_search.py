@@ -9,7 +9,7 @@ from unittest.mock import MagicMock, patch
 from langchain_community.tools.tavily_search import TavilySearchResults
 
 # インポートを有効化
-from nkaa.research_agent_v2.methods.search.web_search import WebSearchMethod
+from nkaa.legacy.research_agent_v2.methods.search.web_search import WebSearchMethod
 
 
 class TestWebSearchMethod(unittest.TestCase):
@@ -17,7 +17,7 @@ class TestWebSearchMethod(unittest.TestCase):
 
     def setUp(self):
         """テスト前のセットアップ."""
-        patcher = patch("nkaa.research_agent_v2.methods.search.web_search.TavilySearchResults")
+        patcher = patch("nkaa.legacy.research_agent_v2.methods.search.web_search.TavilySearchResults")
         self.addCleanup(patcher.stop)
         self.mock_tavily_tool_cls = patcher.start()
         self.mock_tavily_tool_instance = MagicMock(spec=TavilySearchResults)
@@ -80,7 +80,7 @@ class TestWebSearchMethod(unittest.TestCase):
         self.assertEqual(results, [])  # エラー時は空リスト
 
     @patch.dict(os.environ, {}, clear=True)  # APIキーがない状態
-    @patch("nkaa.research_agent_v2.methods.search.web_search.TavilySearchResults")
+    @patch("nkaa.legacy.research_agent_v2.methods.search.web_search.TavilySearchResults")
     def test_web_search_method_init_no_key(self, mock_tavily_tool_cls):
         """APIキーなしで初期化した場合のテスト."""
         settings = {"provider": "tavily", "num_results": 3}
@@ -99,7 +99,7 @@ class TestWebSearchMethod(unittest.TestCase):
         settings = {"provider": "tavily", "num_results": 3}
         with patch.dict(os.environ, {"TAVILY_API_KEY": "fake_tavily_key"}):
             with patch(
-                "nkaa.research_agent_v2.methods.search.web_search.TavilySearchResults",
+                "nkaa.legacy.research_agent_v2.methods.search.web_search.TavilySearchResults",
                 side_effect=ImportError("Cannot import tavily"),
             ) as mock_tavily_import_error:
                 method = WebSearchMethod(settings=settings)

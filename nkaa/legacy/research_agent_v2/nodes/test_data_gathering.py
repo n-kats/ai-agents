@@ -5,11 +5,11 @@ import unittest
 from unittest.mock import MagicMock  # call をインポート
 
 # BaseSearchMethod をインポート
-from nkaa.research_agent_v2.methods.base_method import BaseSearchMethod
+from nkaa.legacy.research_agent_v2.methods.base_method import BaseSearchMethod
 
 # インポートを有効化
-from nkaa.research_agent_v2.nodes.data_gathering import DataGatheringNode
-from nkaa.research_agent_v2.state import AgentState, StructuredError
+from nkaa.legacy.research_agent_v2.nodes.data_gathering import DataGatheringNode
+from nkaa.legacy.research_agent_v2.state import AgentState, StructuredError
 
 
 class TestDataGatheringNode(unittest.TestCase):
