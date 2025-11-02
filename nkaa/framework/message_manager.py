@@ -346,6 +346,11 @@ class MessageManager:
 
         return [self.repository.fetch_message(channel_id, message_id) for channel_id, message_id in pointers]
 
+    def list_channel_messages(self, channel_id: str) -> list[ChannelMessage]:
+        """チャネルに保存されたメッセージ履歴を作成順で取得する。"""
+
+        return list(self.repository.iter_channel_messages(channel_id))
+
     # ------------------------------------------------------------------
     # Helpers
     # ------------------------------------------------------------------

@@ -112,25 +112,33 @@ class LogPanelAdapter:
 
     def _append_line(self, line: str) -> None:
         widget = self._widget
-        if widget is None:
+        if widget is None or not self._widget_ready(widget):
+            self._teardown_widget()
             return
         if not line.endswith("\n"):
             line = f"{line}\n"
-        if hasattr(widget, "write"):
-            widget.write(line)
-        elif hasattr(widget, "add_text"):
-            widget.add_text(line)
-        if self._follow_tail and hasattr(widget, "scroll_end"):
-            widget.scroll_end(animate=False)
+        try:
+            if hasattr(widget, "write"):
+                widget.write(line)
+            elif hasattr(widget, "add_text"):
+                widget.add_text(line)
+            if self._follow_tail and hasattr(widget, "scroll_end"):
+                widget.scroll_end(animate=False)
+        except Exception:
+            self._teardown_widget()
 
     def _render_snapshot(self, records: list[LogRecord]) -> None:
         widget = self._widget
-        if widget is None:
+        if widget is None or not self._widget_ready(widget):
+            self._teardown_widget()
             return
-        if hasattr(widget, "clear"):
-            widget.clear()
-        for record in records:
-            self._append_line(self._formatter(record))
+        try:
+            if hasattr(widget, "clear"):
+                widget.clear()
+            for record in records:
+                self._append_line(self._formatter(record))
+        except Exception:
+            self._teardown_widget()
 
     @staticmethod
     def _default_formatter(record: LogRecord) -> str:
@@ -138,3 +146,18 @@ class LogPanelAdapter:
         context_part = f" [{context}]" if context else ""
         timestamp = record.timestamp.strftime("%H:%M:%S")
         return f"[{timestamp}] <{record.level}> {record.message}{context_part}"
+
+    def _widget_ready(self, widget: Any) -> bool:
+        try:
+            # Textual では widget.app へのアクセス時にアプリが終了していると例外が送出される。
+            _ = getattr(widget, "app")
+        except Exception:
+            return False
+        return True
+
+    def _teardown_widget(self) -> None:
+        # Textual アプリ終了後はログ購読を停止し、ウィジェット参照を破棄する。
+        self.stop()
+        with self._lock:
+            self._widget = None
+            self._app = None

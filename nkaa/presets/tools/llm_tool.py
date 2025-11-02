@@ -305,14 +305,27 @@ class LLMCallTool(BaseTools):
         **params: Any,
     ) -> ParsedModelT:
         """Responses API の構造化出力を非同期に取得する。"""
+        try:
+            with open("a", "w") as f:
+                print("Entering call_parsed_async", file=f)
+                print(f"Messages: {messages}", file=f)
+                print(f"Model name: {model_name}", file=f)
+                print(f"Max output tokens: {max_output_tokens}", file=f)
+                print(parse_model, file=f)
+                print(f"Params: {params}", file=f)
 
-        response = await self.acreate_response(
-            messages,
-            model_name=model_name,
-            text_format=parse_model,
-            max_output_tokens=max_output_tokens,
-            **params,
-        )
+            response = await self.acreate_response(
+                messages,
+                model_name=model_name,
+                text_format=parse_model,
+                max_output_tokens=max_output_tokens,
+                **params,
+            )
+        except asyncio.CancelledError as cancel_exc:
+            with open("b", "w") as f:
+                print("CancelledError in call_parsed_async", file=f)
+                print(cancel_exc, file=f)
+            raise Exception("hoge") from cancel_exc
         parsed = getattr(response, "output_parsed", None)
         if parsed is None:
             raise RuntimeError("Responses API から構造化出力が得られませんでした。")

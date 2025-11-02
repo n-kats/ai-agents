@@ -127,6 +127,26 @@ def test_fetch_read_messages_via_tools(repository_factory: RepositoryFactory) ->
     assert batch[0].payload == {"text": "persisted"}
 
 
+def test_list_channel_messages_returns_history(repository_factory: RepositoryFactory) -> None:
+    repository = repository_factory()
+    channel_manager, message_manager = _build_managers(repository)
+    channel = channel_manager.create(DatabaseChannelConfig(name="timeline"))
+
+    publisher_channels = ChannelTools(agent_id="publisher", manager=channel_manager)
+    publisher_messages = MessageTools(agent_id="publisher", manager=message_manager)
+    subscriber_channels = ChannelTools(agent_id="subscriber", manager=channel_manager)
+
+    publisher_channels.join(channel.id)
+    subscriber_channels.join(channel.id)
+
+    first = publisher_messages.send(channel.id, payload={"text": "first"})
+    second = publisher_messages.send(channel.id, payload={"text": "second"})
+
+    history = publisher_messages.list_channel_messages(channel.id)
+    assert [message.message_id for message in history] == [first.message_id, second.message_id]
+    assert [message.payload for message in history] == [{"text": "first"}, {"text": "second"}]
+
+
 def test_unread_queue_is_restored_from_repository(repository_factory: RepositoryFactory) -> None:
     repository = repository_factory()
     channel_manager, message_manager = _build_managers(repository)

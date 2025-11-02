@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 import asyncio
-from typing import Any
+from typing import Any, Iterable
 
 
 from nkaa.framework.channels.models import ChannelMessage, ChannelMetadata
@@ -68,6 +68,10 @@ class DummyChannels:
     def joined_channel_metadata(self) -> tuple[ChannelMetadata, ...]:
         return self._metadata
 
+    def fetch_messages(self, pointers: Iterable[tuple[str, int]]) -> list[ChannelMessage]:
+        del pointers
+        return []
+
 
 class DummyTools:
     def __init__(self, channels: DummyChannels, llm: "StubbornLLM", log: AgentLogTool) -> None:
@@ -95,6 +99,7 @@ class StubbornLLM:
                 await asyncio.sleep(0.05)
             except asyncio.CancelledError:
                 self.cancelled.set()
+                raise
         return StructuredChannelResponse(
             output_channel="analysis_workspace",
             message=StructuredChannelMessage(role="analysis_summary", content="done"),

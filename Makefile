@@ -1,4 +1,4 @@
-.PHONY: lint format test
+.PHONY: lint format test test_with_api
 TARGET ?= nkaa
 LEGACY_DIR ?= nkaa/legacy
 
@@ -12,3 +12,6 @@ format:
 
 test:
 	pytest --ignore=$(LEGACY_DIR)
+
+test_with_api:
+	pytest --ignore=$(LEGACY_DIR) --run-live-api

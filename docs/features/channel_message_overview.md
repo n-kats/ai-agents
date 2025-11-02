@@ -7,7 +7,7 @@
 - **メッセージ配送**: `MessageManager` がメッセージを永続化 (`channel_messages`) し、受信エージェントごとの未読キュー (`channel_unread`) にポインタを投入します。バックエンドは InMemory/SQL を自動選択します。
 - **ツール層の責務分離**:
   - `ChannelTools` … チャネルメタデータと参加管理に特化。`join/leave/search/join_matching` を提供。
-  - `MessageTools` … メッセージ送受信 (`send/read`)、未読スナップショット (`snapshot_unread`)、履歴再取得 (`fetch_message(s)`) を担当。
+  - `MessageTools` … メッセージ送受信 (`send/read`)、未読スナップショット (`snapshot_unread`)、履歴再取得 (`fetch_message(s)`)、チャネル全体の履歴一覧 (`list_channel_messages`) を担当。
 - **既読の扱い**: `MessageTools.read()` が `channel_unread` から該当行を取り出して削除 → 既読扱い。既読 ID を保持しておけば、再起動後も `fetch_message(s)` で同じ本文を取得可能です。
 
 ## 典型的なフロー
@@ -15,7 +15,7 @@
 2. **参加**: エージェントは `ChannelTools.join()` でチャネルへ登録され、`channel_memberships` に所属が記録される。
 3. **送信**: `MessageTools.send()` が `MessageManager.write()` を呼び、`channel_messages` に本文保存後、未読キューへポインタを投入。
 4. **受信**: 受信側が `MessageTools.read()`。`channel_unread` から最優先メッセージを取得→削除し、`channel_messages` から本文を読み戻す。
-5. **再参照/復元**: エージェントが保持している `(channel_id, message_id)` を `fetch_message(s)` に渡すことで、既読メッセージを履歴からいつでも再取得できる。
+5. **再参照/復元**: エージェントが保持している `(channel_id, message_id)` を `fetch_message(s)` に渡すことで既読メッセージを再取得でき、`list_channel_messages()` でチャネル全体の履歴をダンプして状態点検にも利用できる。
 
 ## コンポーネント関係図
 

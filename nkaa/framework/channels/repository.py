@@ -38,6 +38,10 @@ class ChannelRepository(ABC):
         """履歴から単一のメッセージを読み込む。"""
 
     @abstractmethod
+    def iter_channel_messages(self, channel_id: str) -> Sequence[ChannelMessage]:
+        """チャネルに保存されたメッセージを作成順に走査する。"""
+
+    @abstractmethod
     def flush_channel(self, channel_id: str) -> None:
         """チャネルに対して保留中の書き込みをすべて確定させる。"""
 
@@ -90,6 +94,9 @@ class InMemoryChannelRepository(ChannelRepository):
             if message.message_id == message_id:
                 return message
         raise ChannelRepositoryError(f"Message {message_id} not found in channel {channel_id}")
+
+    def iter_channel_messages(self, channel_id: str) -> Sequence[ChannelMessage]:
+        return list(self._messages.get(channel_id, []))
 
     def flush_channel(self, channel_id: str) -> None:
         # In-memory implementation has nothing to flush.
@@ -258,6 +265,30 @@ class SQLChannelRepository(ChannelRepository):
                 metadata=dict(row.metadata_json or {}),
                 message_id=row.message_id,
             )
+
+    def iter_channel_messages(self, channel_id: str) -> Sequence[ChannelMessage]:
+        with Session(self.engine) as session:
+            rows = (
+                session.execute(
+                    select(_MessageRow)
+                    .where(_MessageRow.channel_id == channel_id)
+                    .order_by(_MessageRow.message_id.asc())
+                )
+                .scalars()
+                .all()
+            )
+        return [
+            ChannelMessage(
+                channel_id=row.channel_id,
+                sender_id=row.sender_id,
+                payload=row.payload,
+                priority=row.priority,
+                created_at=row.created_at,
+                metadata=dict(row.metadata_json or {}),
+                message_id=row.message_id,
+            )
+            for row in rows
+        ]
 
     def flush_channel(self, channel_id: str) -> None:
         # SQLAlchemy のセッション境界ごとに commit 済みなので追加処理は不要。

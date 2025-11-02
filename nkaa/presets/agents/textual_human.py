@@ -580,6 +580,8 @@ if App is not None:
             self._set_status("終了要求を受け付けました。まもなく終了します。")
             self._stop_manager_on_shutdown = True
             self._agent.stop()
+            # Textual の on_shutdown が呼ばれないケースでも確実にマネージャを停止する
+            self._invoke_stop_manager(force=True)
 
         def _invoke_stop_manager(self, *, force: bool = False) -> None:
             if self._stop_manager_called:

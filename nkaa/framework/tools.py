@@ -211,3 +211,8 @@ class MessageTools(BaseTools):
         """チャネル ID とメッセージ ID の組をまとめて解決する。"""
 
         return self.manager.fetch_messages(pointers)
+
+    def list_channel_messages(self, channel_id: str) -> list[ChannelMessage]:
+        """指定チャネルのメッセージ履歴を作成順に取得する。"""
+
+        return self.manager.list_channel_messages(channel_id)
