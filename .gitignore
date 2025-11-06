@@ -8,6 +8,7 @@
 /_temp
 /_log
 /_logs
+/_local
 
 # Added from https://raw.githubusercontent.com/github/gitignore/master/Python.gitignore
 __pycache__/

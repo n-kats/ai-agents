@@ -1,11 +1,13 @@
 # LLM Delegation サンプル開発メモ
 
 ## 現行方針の要点
-- エージェント実装は `DelegationLLMAgent` 1 クラスに集約し、`role` 引数で受付／思考を切り替える。
-- `DelegationLLMAgentConfig` も 1 種類に統一し、JSON 設定ファイルは `role` を指定するだけにする。
-- チャンネル初期化はサンプル前提（人間 1・受付 1・思考 1）に合わせ、`configure_delegation_channels` で固定の2チャネルを作成。汎用的な探索・キャッシュ処理は持たない。
-- LLM 呼び出しは `await invoke_structured_llm(...)` で行い、受付／思考ごとに固定のシステムプロンプトと構造化レスポンスを利用する。`asyncio.CancelledError` を伝播する設計にし、停止要求時に未完了コールを安全に中断できる。
-- チャンネルへ送るメッセージは `with_defaults` により必須フィールドだけを最小限で補完し、過剰なアウトライン整形・要約加工はサンプル外で扱わない。
+- エージェント構成は「人間」「受付」「分析」の 3 役に固定し、実装は `DelegationLLMAgent` 1 クラス＋設定差分で受付／分析を切り替える。人間役は `TextualHumanAgent` をそのまま利用する。
+- `DelegationLLMAgentConfig` も 1 種類に統一し、JSON 設定ファイルは `type` と `system_prompt` を指定するだけとする。
+- チャンネル初期化はサンプル前提（人間 1・受付 1・思考 1）に合わせ、`configure_delegation_channels` で `human_support` / `analysis_workspace` の 2 チャネルを生成。汎用的な探索やキャッシュは行わない。
+- LLM 呼び出しは `await invoke_structured_llm(...)` を通じて行い、受付／分析ごとの専用システムプロンプトと構造化レスポンス（`StructuredChannelResponse`）を利用する。`asyncio.CancelledError` を伝播する設計にし、停止要求時に未完了コールを確実にキャンセルできるようにする。
+- システムプロンプトは、形式ではなく役割・判断手順・出力内容を自然言語で規定し、`message.content` には人間がそのまま読める報告文を生成する方針とする。
+- 受付プロンプトは「要約／背景・制約／分析で深掘りすべき観点／推奨アクション」、分析プロンプトは「状況整理／分析結果／推奨アクション／リスク・懸念／追加で確認したい事項」の固定見出しテンプレートを要求し、LLM に具体的な文章構造を提供する。
+- プロンプト設計のコツは [docs/notes_llm_prompt_template.md](./notes_llm_prompt_template.md) にまとめ、入力セクション化・本文テンプレート化・BaseModel への委譲などの手法を共通化する。
 
 ## 過去構成の課題
 - 受付と思考のエージェントクラスが分かれており、`run` ループやチャネル解決処理がほぼ重複していた。
@@ -17,3 +19,9 @@
 - `invoke_structured_llm` にレスポンスバリデーションやエラー表示を追加し、デバッグしやすくする。
 - サンプル用の最小テスト（`pytest samples/test_llm_delegation.py` 相当）を整備し、役割切替とチャネル渡しを自動確認できるようにする。
 - 人間向けレスポンスの整形が必要になった場合は、`compose_human_reply` のような専用関数を再導入しつつサンプル外部へ切り出す。
+- プロンプト仕様のドキュメント化（役割・情報整理観点・チャネル間のルーティング条件）を強化し、将来的に別モデルへ差し替える際のガイドとする。
+
+## エージェントの役割分担
+- **TextualHumanAgent**: `human_support` チャネルでユーザーと対話する。相談を投稿し、受付から返された分析結果を確認する UI を提供。
+- **受付エージェント** (`DelegationLLMAgent` + 受付プロンプト): 受信チャネルに応じてメッセージをルーティング。human_support からの相談を分析依頼に整形して `analysis_workspace` へ送り、分析結果を自然文の説明に整えて `human_support` へ返す。
+- **分析エージェント** (`DelegationLLMAgent` + 分析プロンプト): 受付から届く analysis_request を解析し、要約・洞察・推奨アクションを含むレポートを `human_support` へ返送する。

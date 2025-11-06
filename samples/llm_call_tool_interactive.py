@@ -15,9 +15,10 @@ from dataclasses import dataclass
 from typing import Any, Iterable
 
 from pydantic import BaseModel, Field
+from dotenv import load_dotenv
 
 from nkaa.presets.tools import LLMCallTool
-
+load_dotenv(override=True)
 
 class GuidanceResponse(BaseModel):
     """Responses API の構造化出力を検証するためのサンプルスキーマ。"""

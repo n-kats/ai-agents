@@ -19,6 +19,7 @@ dependencies = [
     "textual-dev>=1.7.0",
     "textual>=6.2.1",
     "loguru>=0.7.3",
+    "opik>=1.8.97",
 ]
 license = { text = "MIT" }
 

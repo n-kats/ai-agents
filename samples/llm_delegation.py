@@ -4,17 +4,17 @@ from __future__ import annotations
 
 import asyncio
 import json
+import traceback
 from collections import defaultdict
 from collections.abc import Callable
-from contextlib import nullcontext
 from dataclasses import dataclass
 from datetime import datetime
 from pathlib import Path
 from textwrap import dedent
-from typing import Any, Iterable, Literal, Type, cast
+from typing import Any, Iterable, Literal, Mapping, Type, cast
 from uuid import uuid4
 
-from loguru import logger
+from dotenv import load_dotenv
 from pydantic import BaseModel, ConfigDict, Field
 
 from nkaa.framework.agent import (
@@ -41,6 +41,8 @@ from nkaa.presets.agents import (
 )
 from nkaa.presets.tools import LLMCallTool
 
+load_dotenv(override=True)
+
 ANALYSIS_CHANNEL_NAME = "analysis_workspace"
 HUMAN_CHANNEL_NAME = "human_support"
 ANALYSIS_CHANNEL_DESCRIPTION = "分析担当LLMがアウトラインを元に考察を行うワークスペース。"
@@ -48,77 +50,103 @@ HUMAN_CHANNEL_DESCRIPTION = "人間ユーザーとの対話を行う窓口チャ
 
 FRONT_DESK_SYSTEM_PROMPT = dedent(
     """
-    あなたは受付エージェントです。
-    user メッセージには incoming_channel と incoming_message が含まれています。
-    incoming_message は辞書型で、human_support から届くときは
-    {"role": "human", "prompt": <本文>, "request_id": <任意>} の形式です。
-    analysis_workspace から届くときは
-    {"role": "analysis_summary", "content": <要約>, "request_id": <任意>} です。
+    入力文には「受信チャネル情報:」「受信メッセージ:」「利用可能チャネル一覧:」という各セクションが含まれる。それぞれに続く行を読み取り、状況を把握する。
 
-    受付エージェントの出力は JSON オブジェクト 1 つのみです。
-    JSON の全フィールドはダブルクオートで囲み、余計な文字列やコードブロックを付けないでください。
-    返却フォーマット:
-    {
-      "output_channel": "<available_channels.channel_name のいずれか>",
-      "message": {
-        "role": "<チャネルへ投稿するメッセージ種別>",
-        "content": "<本文>",
-        "request_id": "<任意の文字列または省略可>",
-        "metadata": <任意の辞書または省略可>
+    ● 投稿方針
+    - 出力は 1 回の投稿のみ。余計な文章は付けない。
+    - 以下の JSON 形式で回答し、JSON 以外の文字は含めない。
+      ```json
+      {
+        "output_channel": "<投稿先チャネル名>",
+        "message": {
+          "content": "<本文>"
+        }
       }
-    }
+      ```
+    - `message.role` フィールドも忘れずに含め、後述の規則に従って値を設定する。
+    - 要求IDを維持したい場合のみ、`message` に `"request_id": "<要求ID>"` を追加してよい。省略しても構わない。
+    - 投稿先とメッセージ種別（`message.role` に記載）は次の規則に従う。
+      1. 受信チャネル名称が human_support の場合は analysis_workspace へ投稿し、メッセージ種別を analysis_request とする。
+      2. 受信チャネル名称が analysis_workspace かつ送信者ロールが analysis_summary の場合は human_support へ投稿し、メッセージ種別を analysis_summary とする。
+      3. それ以外は投稿しない。
+    - 受信メッセージの要求IDは必要に応じて扱う。引き継がなくてもよい。
 
-    incoming_channel.channel_name が "human_support" の場合:
-      * output_channel は "analysis_workspace" を指定する。
-      * message.role は "analysis_request"。
-      * message.content には incoming_message["prompt"] を読み取り、
-        要約や確認事項、次のアクション案を箇条書きで整理して入れる。
-      * incoming_message に request_id があれば message.request_id にそのまま引き継ぐ。
+    ● human_support から相談を受信したとき（analysis_workspace へ送る依頼）
+      1. 受信メッセージセクションの本文を読み取り、以下のテンプレートを `message.content` に書き込む。見出しは指定の表記どおりに記載し、箇条書きは短い具体文にする。要求IDを引き継ぎたい場合のみ `message.request_id` に転記する。
+         ```
+         要約: <相談内容の要約を2文以内で記述>
+         背景・制約:
+         - <重要な前提や制約条件>
+         分析で深掘りすべき観点:
+         - <分析に必要な視点や質問>
+         推奨アクション:
+         - <次に取るべき行動案>
+         ```
+      2. 受信メッセージに必要な追加フィールドがあれば、責務範囲内で `message.content` に整理して書き込む。
 
-    incoming_channel.channel_name が "analysis_workspace" で
-    incoming_message.role が "analysis_summary" の場合:
-      * output_channel は "human_support" を指定する。
-      * message.role は "analysis_summary"。
-      * message.content には incoming_message["content"] を転記し、
-        人間ユーザーにそのまま届ける。
-      * request_id が存在するなら message.request_id に設定する。
-
-    上記以外のケースでは JSON を返さず、何も出力しない。
+    ● analysis_workspace から分析結果を受信したとき（human_support へ返す報告）
+      1. 受信メッセージの本文を読み、次のテンプレートを `message.content` に書き込む。
+         ```
+         結論: <ユーザーに伝える最終的な結論を1〜2文で記述>
+         根拠:
+         - <結論を支える要点やデータ>
+         推奨アクション:
+         - <ユーザーが実行すべき行動>
+         追加で確認すべき点:
+         - <不足情報や追加質問>
+         ```
+      2. 受信メッセージに含まれる重要情報は、必要に応じて `message.content` に反映する。
     """
 ).strip()
 
 THINKING_SYSTEM_PROMPT = dedent(
     """
-    あなたは分析担当です。
-    incoming_channel.channel_name が "analysis_workspace" で
-    incoming_message.role が "analysis_request" の場合のみ対応します。
-    incoming_message は {"role": "analysis_request", "content": <受付エージェントの要約>,
-    "request_id": <任意>} の形式です。
+    入力文には「受信チャネル情報:」「受信メッセージ:」「利用可能チャネル一覧:」という各セクションが含まれる。それぞれを読み、analysis_workspace で受信した依頼を理解する。
 
-    出力は JSON オブジェクト 1 つのみとし、以下のフォーマットに厳密に従ってください。
-    余計な説明やコードブロックは付けないでください。
-    {
-      "output_channel": "<available_channels.channel_name のいずれか>",
-      "message": {
-        "role": "<チャネルへ投稿するメッセージ種別>",
-        "content": "<本文>",
-        "request_id": "<任意の文字列または省略可>",
-        "metadata": <任意の辞書または省略可>
+    ● 投稿方針
+    - 出力は 1 回の投稿のみ。余計な文章を付けない。
+    - 以下の JSON 形式で回答し、JSON 以外の文字は含めない。
+      ```json
+      {
+        "output_channel": "<投稿先チャネル名>",
+        "message": {
+          "content": "<本文>"
+        }
       }
-    }
+      ```
+    - `message.role` フィールドも忘れずに含め、後述の規則に従って値を設定する。
+    - 要求IDを維持したい場合のみ、`message` に `"request_id": "<要求ID>"` を追加してよい。省略しても構わない。
+    - 投稿先は常に analysis_workspace、メッセージ種別（`message.role`）は analysis_summary。
+    - 受信メッセージの要求IDは必要に応じて扱う。引き継がなくてもよい。
 
-    * output_channel には通常 "analysis_workspace" を指定する。
-    * message.role は必ず "analysis_summary"。
-    * message.content には human_support へ伝える分析サマリー、結論、推奨アクションを日本語で記述する。
-      箇条書きや番号付きリストを活用して読みやすくまとめる。
-    * incoming_message に request_id が含まれていれば message.request_id に引き継ぐ。
-    * metadata が不要な場合は省略する。
+    ● 本文作成
+    1. 受信メッセージセクションの本文を読み、分析の前提を把握する。本文が確認できない場合は投稿しない。
+    2. 次のテンプレートを `message.content` に書き込み、見出しは表記どおりに記載する。要求IDを引き継ぎたい場合のみ `message.request_id` に転記する。
+       ```
+       状況整理: <依頼の背景と目的を要約>
+       分析結果:
+       - <主要な洞察や評価>
+       推奨アクション:
+       - <実行すべき行動案>
+       リスク・懸念:
+       - <想定される課題や注意点>
+       追加で確認したい事項:
+       - <不足情報や追加質問>
+       ```
+    3. 追加フィールドに含まれる重要な情報があれば、受付へ返す際に `message.content` へ反映する。
+    """
+).strip()
 
-    条件に合わないメッセージを受け取った場合は何も出力しない。
+LLM_USER_MESSAGE_TEMPLATE = dedent(
+    """
+    以下は最新の受信情報です。内容を読み取り、system 指示にしたがって応答を生成してください。
+
+    {payload}
     """
 ).strip()
 
 _LLM_CALL_LOG_DIR = Path("_tmp/samples/llm_delegation/llm_calls")
+SYSTEM_AGENT_ID = "system"
 
 
 def _channel_display_name(metadata: ChannelMetadata) -> str:
@@ -136,20 +164,139 @@ def _summarize_payload(payload: Any, *, limit: int = 160) -> str:
     return text[: limit - 3] + "..."
 
 
+def _format_scalar(value: Any) -> str:
+    if isinstance(value, (int, float)) and not isinstance(value, bool):
+        return str(value)
+    if value is None:
+        return "null"
+    if isinstance(value, str):
+        return value
+    if isinstance(value, bool):
+        return "true" if value else "false"
+    return json.dumps(value, ensure_ascii=False)
+
+
+def _format_additional_fields(
+    mapping: Mapping[str, Any],
+    *,
+    excluded: set[str],
+    label: str,
+) -> str | None:
+    extras = {
+        key: value for key, value in mapping.items() if key not in excluded
+    }
+    if not extras:
+        return None
+    pairs = ", ".join(
+        f"{key}={_format_scalar(value)}" for key, value in sorted(extras.items())
+    )
+    return f"{label}: {pairs}。"
+
+
+def _format_llm_payload(payload: Mapping[str, Any]) -> str:
+    incoming_channel = payload.get("incoming_channel")
+    incoming_message = payload.get("incoming_message")
+    available_channels = payload.get("available_channels")
+
+    sections: list[str] = []
+
+    channel_lines: list[str] = ["受信チャネル情報:"]
+    if isinstance(incoming_channel, Mapping):
+        name = incoming_channel.get("channel_name") or incoming_channel.get("name") or "不明"
+        channel_id = incoming_channel.get("channel_id") or incoming_channel.get("id") or "不明"
+        description = incoming_channel.get("channel_description") or incoming_channel.get("description")
+        channel_lines.append(f"  名称: {name}")
+        channel_lines.append(f"  ID: {channel_id}")
+        channel_lines.append(f"  説明: {description if isinstance(description, str) and description.strip() else '記載なし'}")
+        extra = _format_additional_fields(
+            incoming_channel,
+            excluded={"channel_name", "channel_id", "channel_description", "name", "description"},
+            label="追加属性",
+        )
+        if extra:
+            channel_lines.append(f"  {extra}")
+    else:
+        channel_lines.append("  記載なし")
+    sections.append("\n".join(channel_lines))
+
+    message_lines: list[str] = ["受信メッセージ:"]
+    if isinstance(incoming_message, Mapping):
+        role = incoming_message.get("role") or "不明"
+        message_lines.append(f"  送信者ロール: {role}")
+        primary_text = None
+        for key in ("content", "prompt", "text", "body"):
+            value = incoming_message.get(key)
+            if isinstance(value, str) and value.strip():
+                primary_text = value
+                break
+        if primary_text:
+            message_lines.append(f"  本文: {primary_text}")
+        else:
+            message_lines.append("  本文: 記載なし")
+        request_id = incoming_message.get("request_id")
+        if isinstance(request_id, str) and request_id.strip():
+            message_lines.append(f"  要求ID: {request_id}")
+        metadata = incoming_message.get("metadata")
+        if isinstance(metadata, Mapping) and metadata:
+            meta_sentence = _format_additional_fields(
+                metadata,
+                excluded=set(),
+                label="付随メタデータ",
+            )
+            if meta_sentence:
+                message_lines.append(f"  {meta_sentence}")
+        extra_message = _format_additional_fields(
+            incoming_message,
+            excluded={"role", "content", "prompt", "text", "body", "request_id", "metadata"},
+            label="追加フィールド",
+        )
+        if extra_message:
+            message_lines.append(f"  {extra_message}")
+    else:
+        message_lines.append("  記載なし")
+    sections.append("\n".join(message_lines))
+
+    channel_list_lines: list[str] = ["利用可能チャネル一覧:"]
+    if isinstance(available_channels, list):
+        if available_channels:
+            for channel in available_channels:
+                if isinstance(channel, Mapping):
+                    name = channel.get("channel_name") or channel.get("name") or "名称未設定"
+                    description = channel.get("channel_description") or channel.get("description")
+                    if isinstance(description, str) and description.strip():
+                        channel_list_lines.append(f"  - 名称: {name} / 説明: {description}")
+                    else:
+                        channel_list_lines.append(f"  - 名称: {name} / 説明: 記載なし")
+                else:
+                    channel_list_lines.append(f"  - {json.dumps(channel, ensure_ascii=False)}")
+        else:
+            channel_list_lines.append("  - 記載なし")
+    else:
+        channel_list_lines.append("  - 記載なし")
+    sections.append("\n".join(channel_list_lines))
+
+    return "\n\n".join(sections).strip()
+
+
 class StructuredChannelMessage(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
-    role: str
-    content: str
-    request_id: str | None = None
-    metadata: dict[str, str] | None = None
+    role: str = Field(..., description="送信メッセージのロール。例: analysis_request, analysis_summary, human など。")
+    content: str = Field(..., description="投稿本文。system 指示で指定したテンプレートをそのまま記載する。")
+    request_id: str | None = Field(
+        default=None,
+        description="元メッセージの要求ID。必要な場合のみ設定し、不要なら省略してよい。",
+    )
 
 
 class StructuredChannelResponse(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
-    output_channel: str
-    message: StructuredChannelMessage
+    output_channel: str = Field(..., description="投稿先チャネル名。human_support など display name を指定する。")
+    message: StructuredChannelMessage = Field(
+        ...,
+        description="チャネルへ送信するメッセージ構造体。",
+    )
 
 
 @dataclass
@@ -195,12 +342,10 @@ class DelegationLLMAgent(BaseAgent[DelegationAgentTools]):
         *,
         system_prompt: str,
         model: str,
-        shutdown_grace_period: float = 5.0,
     ) -> None:
         self.agent_id = agent_id
         self.model = model
         self.system_prompt = system_prompt
-        self._shutdown_grace_period = shutdown_grace_period
         self._loop: asyncio.AbstractEventLoop | None = None
         self._stop_event: asyncio.Event | None = None
         self._inflight_tasks: set[asyncio.Task[Any]] = set()
@@ -247,19 +392,16 @@ class DelegationLLMAgent(BaseAgent[DelegationAgentTools]):
         stop_event: asyncio.Event,
         *,
         poll_interval: float = 0.1,
-    ) -> StructuredChannelResponse:
+    ) -> StructuredChannelResponse | None:
         while True:
             if stop_event.is_set():
                 if task.done():
-                    return await task
-                graceful_timeout = max(self._shutdown_grace_period, 0.0)
-                if graceful_timeout > 0:
                     try:
-                        return await asyncio.wait_for(task, timeout=graceful_timeout)
-                    except asyncio.TimeoutError:
-                        pass
+                        return await task
+                    except asyncio.CancelledError:
+                        return None
                 await self._cancel_task(task)
-                raise asyncio.CancelledError
+                return None
             try:
                 return await asyncio.wait_for(task, timeout=poll_interval)
             except asyncio.TimeoutError:
@@ -274,7 +416,7 @@ class DelegationLLMAgent(BaseAgent[DelegationAgentTools]):
         self,
         tools: DelegationAgentTools,
         agent_logger: Any,
-        log_tool: AgentLogTool | None,
+        log_tool: AgentLogTool,
         channel_id: str,
         *,
         max_entries: int = 5,
@@ -292,7 +434,7 @@ class DelegationLLMAgent(BaseAgent[DelegationAgentTools]):
             }
             for msg in history
         ]
-        with (log_tool.context(channel_id=channel_id) if log_tool else nullcontext()):
+        with log_tool.context(channel_id=channel_id):
             agent_logger.debug(
                 "Fetched history entries via fetch_messages() (latest={}): {}",
                 len(entries),
@@ -300,11 +442,8 @@ class DelegationLLMAgent(BaseAgent[DelegationAgentTools]):
             )
 
     async def run_async(self, tools: DelegationAgentTools) -> None:
-        log_tool = tools.log
-        agent_logger = (
-            log_tool.logger if log_tool is not None else logger.bind(
-                agent_id=self.agent_id)
-        )
+        log_tool = tools.log or AgentLogTool(agent_id=self.agent_id)
+        agent_logger = log_tool.logger
         loop = asyncio.get_running_loop()
         stop_event = asyncio.Event()
         self._loop = loop
@@ -332,7 +471,7 @@ class DelegationLLMAgent(BaseAgent[DelegationAgentTools]):
                 if message.sender_id == self.agent_id:
                     continue
                 if not isinstance(message.payload, dict):
-                    with (log_tool.context(channel_id=message.channel_id) if log_tool else nullcontext()):
+                    with log_tool.context(channel_id=message.channel_id):
                         agent_logger.warning(
                             "Skipping non-dict payload from channel {}: {!r}",
                             message.channel_id,
@@ -349,13 +488,13 @@ class DelegationLLMAgent(BaseAgent[DelegationAgentTools]):
                 incoming = next(
                     (meta for meta in channel_metadata if meta.id == message.channel_id), None)
                 if incoming is None:
-                    with (log_tool.context(channel_id=message.channel_id) if log_tool else nullcontext()):
+                    with log_tool.context(channel_id=message.channel_id):
                         agent_logger.debug(
                             "Skipping message from unexpected channel {}",
                             message.channel_id,
                         )
                     continue
-                with (log_tool.context(channel_id=message.channel_id) if log_tool else nullcontext()):
+                with log_tool.context(channel_id=message.channel_id):
                     agent_logger.info(
                         "Agent {} received message via {} from {}: {}",
                         self.agent_id,
@@ -391,12 +530,13 @@ class DelegationLLMAgent(BaseAgent[DelegationAgentTools]):
                     name=f"llm-call-{self.agent_id}",
                 )
                 self._inflight_tasks.add(llm_task)
+                dispatch: StructuredChannelResponse | None = None
                 try:
                     dispatch = await self._await_llm_dispatch(llm_task, stop_event)
-                except asyncio.CancelledError:
-                    break
                 finally:
                     self._inflight_tasks.discard(llm_task)
+                if dispatch is None:
+                    break
                 if stop_event.is_set():
                     break
                 target: str | None = None
@@ -407,14 +547,14 @@ class DelegationLLMAgent(BaseAgent[DelegationAgentTools]):
                             target = meta.id
                             break
                     else:
-                        with (log_tool.context(channel_id=message.channel_id) if log_tool else nullcontext()):
+                        with log_tool.context(channel_id=message.channel_id):
                             agent_logger.warning(
                                 "Unknown output channel '{}' from agent {}; falling back",
                                 dispatch.output_channel,
                                 self.agent_id,
                             )
                 if target is None:
-                    with (log_tool.context(channel_id=message.channel_id) if log_tool else nullcontext()):
+                    with log_tool.context(channel_id=message.channel_id):
                         agent_logger.warning(
                             "No output channel resolved; returning to source {}",
                             message.channel_id,
@@ -426,7 +566,7 @@ class DelegationLLMAgent(BaseAgent[DelegationAgentTools]):
                     (meta for meta in channel_metadata if meta.id == target), None)
                 target_label = _channel_display_name(
                     target_meta) if target_meta else target
-                with (log_tool.context(channel_id=target) if log_tool else nullcontext()):
+                with log_tool.context(channel_id=target):
                     agent_logger.info(
                         "Sent message to {} with role={}",
                         target_label,
@@ -436,25 +576,8 @@ class DelegationLLMAgent(BaseAgent[DelegationAgentTools]):
             pending = tuple(self._inflight_tasks)
             self._inflight_tasks.clear()
             if pending:
-                timeout = max(self._shutdown_grace_period, 0.0)
-                if timeout > 0:
-                    gather_task = asyncio.gather(
-                        *pending, return_exceptions=True)
-                    try:
-                        await asyncio.wait_for(asyncio.shield(gather_task), timeout=timeout)
-                    except asyncio.TimeoutError:
-                        with (log_tool.context() if log_tool else nullcontext()):
-                            agent_logger.warning(
-                                "Timed out waiting for %d inflight LLM task(s) to finish; forcing shutdown",
-                                len([task for task in pending if not task.done()]),
-                            )
-                        for task in pending:
-                            await self._cancel_task(task)
-                        await gather_task
-                else:
-                    for task in pending:
-                        await self._cancel_task(task)
-                    await asyncio.gather(*pending, return_exceptions=True)
+                for task in pending:
+                    await self._cancel_task(task)
             self._loop = None
             self._stop_event = None
             self._pending_stop = False
@@ -472,10 +595,11 @@ async def invoke_structured_llm(
     # format_messages = []
     # format_message = "\n".join(format_messages)
 
+    formatted_payload = _format_llm_payload(payload)
+    user_content = LLM_USER_MESSAGE_TEMPLATE.format(payload=formatted_payload)
     messages = [
-        {"role": "system", "content": system_prompt},
-        {"role": "user", "content": json.dumps(payload, ensure_ascii=False)},
-        # {"role": "user", "content": f"上記の内容に基づいて対応してください。\n{format_message}"
+        {"role": "developer", "content": system_prompt},
+        {"role": "user", "content": user_content},
     ]
     incoming = payload.get("incoming_channel", {})
     if isinstance(incoming, dict):
@@ -485,10 +609,12 @@ async def invoke_structured_llm(
         channel_name = "n/a"
         channel_id = None
 
-    def _context() -> Any:
-        return log.context(channel_id=channel_id) if log else nullcontext()
+    active_log = log or AgentLogTool(agent_id=SYSTEM_AGENT_ID)
 
-    bound_logger = log.logger if log else logger
+    def _context() -> Any:
+        return active_log.context(channel_id=channel_id)
+
+    bound_logger = active_log.logger
     call_record: dict[str, Any] = {
         "call_id": str(uuid4()),
         "timestamp": datetime.now().astimezone().isoformat(),
@@ -498,6 +624,7 @@ async def invoke_structured_llm(
         "system_prompt": system_prompt,
         "messages": messages,
         "payload": payload,
+        "formatted_payload": formatted_payload,
     }
     with _context():
         bound_logger.info("LLM call channel={} model={}", channel_name, model)
@@ -524,21 +651,29 @@ async def invoke_structured_llm(
                 str(log_path),
             )
         raise
-    except Exception:
+    except Exception as exc:
         prompt_dump = json.dumps(messages, ensure_ascii=False, indent=2)
         payload_dump = json.dumps(payload, ensure_ascii=False, indent=2)
+        traceback_text = traceback.format_exc()
         call_record["status"] = "error"
+        call_record["error_type"] = type(exc).__name__
+        call_record["error_message"] = str(exc)
         call_record["prompt_dump"] = prompt_dump
         call_record["payload_dump"] = payload_dump
+        call_record["traceback"] = traceback_text
         log_path = await asyncio.to_thread(_write_llm_call_log, call_record)
+        error_message = (
+            "LLM call failed.\n"
+            f"error_type={type(exc).__name__}\n"
+            f"error_message={exc}\n"
+            f"system_prompt={system_prompt}\n"
+            f"messages={prompt_dump}\n"
+            f"payload={payload_dump}\n"
+            f"traceback={traceback_text}\n"
+            f"log={log_path}"
+        )
         with _context():
-            bound_logger.error(
-                "LLM call failed. system_prompt={}\nmessages={}\npayload={}\nlog={}",
-                system_prompt,
-                prompt_dump,
-                payload_dump,
-                str(log_path),
-            )
+            bound_logger.error(error_message)
         raise
 
 
@@ -570,14 +705,12 @@ class DelegationLLMAgentConfig(AgentConfig):
     type: Literal["delegation_llm"] = "delegation_llm"
     system_prompt: str
     model: str = Field("gpt-5-mini")
-    shutdown_grace_period: float = Field(5.0, ge=0.0)
 
     def build(self) -> DelegationLLMAgent:
         return DelegationLLMAgent(
             agent_id=self.id,
             model=self.model,
             system_prompt=self.system_prompt,
-            shutdown_grace_period=self.shutdown_grace_period,
         )
 
 
@@ -760,7 +893,7 @@ def _collect_agent_logs(*, level: str = "INFO") -> list[dict[str, Any]]:
 def _render_report_fallback(channel_histories: list[dict[str, Any]], agent_logs: list[dict[str, Any]]) -> None:
     """チャネル履歴とログ集計をシステムログへ書き出す。"""
 
-    report_logger = logger.bind(agent_id="system", section="summary_report")
+    report_log_tool = AgentLogTool(agent_id=SYSTEM_AGENT_ID)
 
     history_lines: list[str] = ["=== チャネル履歴 ==="]
     if not channel_histories:
@@ -779,8 +912,6 @@ def _render_report_fallback(channel_histories: list[dict[str, Any]], agent_logs:
                 f"    #{message_no} {created_at} {message['sender_id']}: {message['summary']}"
             )
 
-    report_logger.info("\n".join(history_lines))
-
     log_lines: list[str] = ["=== エージェント別ログ（INFO 以上） ==="]
     if not agent_logs:
         log_lines.append("ログは出力されませんでした。")
@@ -798,7 +929,9 @@ def _render_report_fallback(channel_histories: list[dict[str, Any]], agent_logs:
             log_lines.append(
                 f"    [{entry['level']}] {timestamp} {entry['message']}{context_text}")
 
-    report_logger.info("\n".join(log_lines))
+    with report_log_tool.context(section="summary_report"):
+        report_log_tool.logger.info("\n".join(history_lines))
+        report_log_tool.logger.info("\n".join(log_lines))
 
 
 def _show_report_cui(tools: DelegationManagerTools) -> None:
@@ -809,19 +942,23 @@ def _show_report_cui(tools: DelegationManagerTools) -> None:
 
 def _write_llm_call_log(entry: dict[str, Any]) -> Path:
     _LLM_CALL_LOG_DIR.mkdir(parents=True, exist_ok=True)
-    timestamp = entry.get("timestamp") or datetime.now().astimezone().isoformat()
+    timestamp = entry.get(
+        "timestamp") or datetime.now().astimezone().isoformat()
     call_id = entry.setdefault("call_id", str(uuid4()))
-    safe_timestamp = timestamp.replace(":", "-").replace("+", "_").replace(" ", "_")
+    safe_timestamp = timestamp.replace(
+        ":", "-").replace("+", "_").replace(" ", "_")
     filename = f"{safe_timestamp}_{call_id}.json"
     path = _LLM_CALL_LOG_DIR / filename
-    path.write_text(json.dumps(entry, ensure_ascii=False, indent=2), encoding="utf-8")
+    path.write_text(json.dumps(entry, ensure_ascii=False,
+                    indent=2), encoding="utf-8")
     return path
 
 
 def run_demo() -> None:
     # Textual CUI でログを確認する前提のため、コンソールシンクは無効化
     configure_logging(buffer_limit=500)
-    logger.info("Starting delegation demo setup")
+    system_log_tool = AgentLogTool(agent_id=SYSTEM_AGENT_ID)
+    system_log_tool.logger.info("Starting delegation demo setup")
     config_dir = Path("_tmp/samples/llm_delegation")
     prepare_configs(config_dir)
     manager = StandardManager.initialize_or_load(

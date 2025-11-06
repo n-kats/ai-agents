@@ -3,10 +3,10 @@
 Textual UI からの終了要求でマネージャを即時停止させたいが、従来は LLM 呼び出し待ちでエージェントスレッドがブロックし続けてしまう。ここでは、LLM 呼び出しを非同期化しつつ安全にキャンセル・保存・停止を行うための詳細計画と、実装済みの内容をまとめる。
 
 ## 現状の課題
-- `DelegationLLMAgent.run` は同期ループで `ChannelTools.read(block=True)` → LLM 呼び出し → 応答送信を行い、途中で停止イベントを受け取っても処理を中断できない。
+- 旧実装の `DelegationLLMAgent.run` は同期ループで `MessageTools.read(block=True)` → LLM 呼び出し → 応答送信を行い、途中で停止イベントを受け取っても処理を中断できなかった。
 - `LLMCallTool` にはキャンセル手段がなく、HTTP リクエストの完了を待つしかない。
-- `ChannelManager` / `ChannelTools` は同期キュー (`queue.PriorityQueue`) を前提にした実装のため、`asyncio` ベースの分岐を追加する余地がない。
-- ログ・履歴（`AgentLogTool`, `StdIOHumanHistory`）はスレッドからのアクセスを想定しているため、非同期タスク対応時に排他制御を見直す必要がある。
+- チャネル関連コンポーネントは同期キュー (`queue.PriorityQueue`) を前提にした構成で、`ChannelManager` / `MessageManager` から `MessageTools` へ非同期インターフェースを提供できていない。
+- ログ・履歴（`AgentLogTool`、`StdIOHumanHistory`）はスレッドからのアクセスを想定しているため、非同期タスク対応時に排他制御を見直す必要がある。
 
 ## 目標
 1. LLM 呼び出し中でも停止イベントを受け次第キャンセルし、最小限の状態保存を行ってからエージェントを終了できるようにする。
@@ -20,8 +20,8 @@ Textual UI からの終了要求でマネージャを即時停止させたいが
 - メッセージ配送責務を `MessageManager` へ分離し、`ChannelManager` はチャネルメタデータとメンバーシップの管理に注力できるようにした。離脱時は `MessageManager.discard_agent_channels()` を介して未読ポインタを破棄する。
 - `LLMCallTool` に `acreate_response` / `call_parsed_async` など複数の `async` API を追加し、OpenAI SDK の `AsyncOpenAI` を利用したキャンセル可能な呼び出しを実現。同期メソッドは従来どおり `OpenAI` クライアントを使用し互換性を維持。
 - `DelegationLLMAgent` は `run_async` を新設し、`asyncio.create_task` で LLM 呼び出しを追跡しつつ `/quit` による `stop()` シグナルで未完了タスクを `cancel()` する。`invoke_structured_llm` も `async def` 化してログと例外ハンドリングを整理した。
-- `DelegationLLMAgent` に `shutdown_grace_period` を導入し、キャンセルに応答しない LLM タスクでも一定時間後に待機を打ち切れるようにした。
-- `tests/samples/test_llm_delegation_shutdown.py` を追加し、擬似 LLM を用いたグレースタイムアウト動作を回帰テスト化した。
+- `DelegationLLMAgent` の `shutdown_grace_period` を撤廃し、停止時は即座に LLM タスクへキャンセルを伝搬するのみとした。
+- `tests/samples/test_llm_delegation_shutdown.py` を追加し、擬似 LLM を用いた停止時の即時キャンセル動作を回帰テスト化した。
 - `tests/framework/test_channels.py` に非同期 API のラウンドトリップ検証を追加し、最低限の回帰テストを整備した。
 
 今後は UI 経由の統合キャンセル挙動や、`MultiprocessingManagerExecutionBackend` との整合性検証を継続する。
@@ -55,7 +55,7 @@ Textual UI からの終了要求でマネージャを即時停止させたいが
 - キャンセル後に中断された対話をどこまで履歴に残すか、UI 表示の仕様（ユーザへの通知方法）を検討する。
 
 ## アクションアイテム
-1. ✅ `MessageTools.read_async` / `send_async` を追加し、非同期ユニットテストを整備した。
-2. ✅ `DelegationLLMAgent.run_async` と `LLMCallTool` の async API を実装し、サンプルでの動作を移行した。
-3. ☐ Textual UI からの停止要求で `asyncio` タスクキャンセルが期待通り伝播する統合テストを整備する。
-4. ✅ ドキュメント（本ページおよび `docs/implementation_status.md`）へ設計意図と進捗を記録した。
+- [x] `MessageTools.read_async` / `send_async` を追加し、非同期ユニットテストを整備した。
+- [x] `DelegationLLMAgent.run_async` と `LLMCallTool` の async API を実装し、サンプルでの動作を移行した。
+- [ ] Textual UI からの停止要求で `asyncio` タスクキャンセルが期待通り伝播する統合テストを整備する。
+- [x] ドキュメント（本ページおよび [docs/implementation_status.md](../implementation_status.md)）へ設計意図と進捗を記録した。

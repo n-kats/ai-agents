@@ -49,7 +49,7 @@
 - `ChannelMessage.payload` には JSON など構造化データを保持できる。永続層でのシリアライズ形式はリポジトリ実装が担う。
 - `MessageManager.snapshot_unread_records()` で未読キューのスナップショットを取得し、永続化はリポジトリやエージェント側の責務として扱う。
 - チャネル ID は `channel_{n}` 形式で発番し、外部指定は今後の拡張とする。
-- InMemory リポジトリを用いた動作確認では、後述のサンプルコードのように `ChannelManager` と `ChannelTools` を組み合わせて基本的な送受信と復元フローを確認できる。
+- InMemory リポジトリを用いた動作確認では、後述のサンプルコードのように `ChannelManager` / `MessageManager` と `ChannelTools` / `MessageTools` を組み合わせて基本的な送受信と復元フローを確認できる。
 
 ## 未決事項・課題
 - ~~**PostgreSQL 実装**~~: SQLAlchemy ベースの `SQLChannelRepository` としてチャネル履歴／未読スナップショットの永続化を実装済み（PostgreSQL, SQLite をサポート）。
@@ -105,6 +105,6 @@ print("Restored unread:", restored_message.payload if restored_message else None
 ```
 
 ## 関連資料
-- `docs/channel_persistence_plan.md` : PostgreSQL を用いた永続化設計案。
-- `docs/implementation_status.md` : チャネル実装に関する進捗と残タスク。
+- [docs/channel_persistence_plan.md](./channel_persistence_plan.md) : PostgreSQL を用いた永続化設計案。
+- [docs/implementation_status.md](./implementation_status.md) : チャネル実装に関する進捗と残タスク。
 - `tests/framework/test_channels.py` : InMemory 実装でチャネルの送受信や復元を確認するテスト。

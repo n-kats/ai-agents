@@ -28,7 +28,7 @@
 ```md
 # ExecPlan ワークフロー
 
-複雑な機能追加や大規模リファクタリングでは、docs/meta_plan/exec_plan_guidelines.md に従った ExecPlan を
+複雑な機能追加や大規模リファクタリングでは、[docs/meta_plan/exec_plan_guidelines.md](docs/meta_plan/exec_plan_guidelines.md) に従った ExecPlan を
 作成し、設計から実装まで一貫して活用する。
 ```
 

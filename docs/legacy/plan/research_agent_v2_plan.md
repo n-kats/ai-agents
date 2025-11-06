@@ -14,7 +14,7 @@
 
 ## 2. ディレクトリ構成案
 
-`docs/meta_plan/directory_structure.md` を参照し、v1 の構成をベースに以下のように変更・追加する。**テストファイルは各モジュール内に配置する (`test_*.py`)。**
+[docs/meta_plan/directory_structure.md](../../meta_plan/directory_structure.md) を参照し、v1 の構成をベースに以下のように変更・追加する。**テストファイルは各モジュール内に配置する (`test_*.py`)。**
 
 ```
 .
@@ -153,9 +153,9 @@ class AgentState(TypedDict):
 
 ## 5. ドキュメント
 
-*   `docs/meta_plan/docs_guidelines.md` に従い、以下のドキュメントを作成・更新する。
+*   [docs/meta_plan/docs_guidelines.md](../../meta_plan/docs_guidelines.md) に従い、以下のドキュメントを作成・更新する。
     *   `README.md`: プロジェクト概要、セットアップ、実行方法。
     *   `docs/usage/`: 使い方、設定ファイルの詳細。
-    *   `docs/plan/research_agent_v2_plan.md`: この設計ドキュメント。
+    *   [docs/plan/research_agent_v2_plan.md](../plan/research_agent_v2_plan.md): この設計ドキュメント。
     *   `docs/internal/`: (必要であれば) 内部実装の詳細、クラス図、シーケンス図など。
-*   コードコメントも `docs/meta_plan/comment_guidelines.md` に従って記述する。
+*   コードコメントも [docs/meta_plan/comment_guidelines.md](../../meta_plan/comment_guidelines.md) に従って記述する。

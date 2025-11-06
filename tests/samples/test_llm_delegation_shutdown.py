@@ -119,7 +119,7 @@ class RecordingLLM:
         )
 
 
-def test_delegation_agent_shutdown_times_out_on_stubborn_llm() -> None:
+def test_delegation_agent_stop_cancels_stubborn_llm() -> None:
     asyncio.run(_run_shutdown_scenario())
 
 
@@ -132,7 +132,6 @@ async def _run_shutdown_scenario() -> None:
         agent_id="thinking_agent",
         system_prompt="system",
         model="gpt-5-mini",
-        shutdown_grace_period=0.1,
     )
 
     channels.queue_message(
@@ -168,7 +167,6 @@ async def _run_stop_before_start_scenario() -> None:
         agent_id="front_desk_agent",
         system_prompt="system",
         model="gpt-5-mini",
-        shutdown_grace_period=0.1,
     )
 
     agent.stop()

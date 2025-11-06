@@ -18,7 +18,7 @@
 ## 事前準備
 
 1. **現状把握**  
-   - `docs/directory_structure.md` で関連資料の配置場所を確認する。  
+   - [docs/directory_structure.md](../directory_structure.md) で関連資料の配置場所を確認する。  
    - `AGENTS.md` の「ワークフロー」節と既存の `docs/meta_plan/*_guidelines.md` を読み、同種の内容がないか把握する。
 2. **元資料の収集**  
    - ユーザー指定の URL や添付資料をすべてローカルに保存し、参照箇所を明示する。  
@@ -34,7 +34,7 @@
    - 「ワークフロー」節に新しい小項目を追加し、**目的・トリガー（または適用例）・詳細**の三点セットで要約する。  
    - 「詳細」は「`docs/meta_plan/...` を参照。このワークフローを実施時に必ず参照すること。」の形式に統一する。
 3. **関連ドキュメントの確認**  
-   - 必要に応じて `docs/implementation_status.md` の Documentation 項目へタスクを追加または完了済みとして記録する。  
+   - 必要に応じて [docs/implementation_status.md](../implementation_status.md) の Documentation 項目へタスクを追加または完了済みとして記録する。  
    - 既存のドキュメントと矛盾がないかを確認し、差分レビューで説明できるようにする。
 
 ## メタドキュメント用テンプレート
