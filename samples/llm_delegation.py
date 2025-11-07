@@ -402,10 +402,10 @@ class DelegationLLMAgent(BaseAgent[DelegationAgentTools]):
                         return None
                 await self._cancel_task(task)
                 return None
-            try:
-                return await asyncio.wait_for(task, timeout=poll_interval)
-            except asyncio.TimeoutError:
-                await asyncio.sleep(0)
+            done, _ = await asyncio.wait({task}, timeout=poll_interval)
+            if task in done:
+                return await task
+            await asyncio.sleep(0)
 
     def _store_pointer(self, message: ChannelMessage) -> tuple[str, int]:
         pointer = (message.channel_id, message.message_id)

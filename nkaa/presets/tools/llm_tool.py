@@ -3,38 +3,17 @@ from __future__ import annotations
 import asyncio
 import json
 import os
-import traceback
 from dataclasses import dataclass, field
-from typing import Any, Iterable, Literal, Sequence, TypeVar, cast
+from typing import Any, Iterable, Literal, Sequence, TypeVar
+from weakref import WeakKeyDictionary
 
 from loguru import logger
 from opik import Opik
 from opik.integrations.openai import track_openai
+from openai import AsyncOpenAI, OpenAI
 from pydantic import BaseModel, ConfigDict, Field
 
 from nkaa.framework.agent import BaseTools
-
-OpenAI: type[Any] | None
-AsyncOpenAI: type[Any] | None
-
-try:  # pragma: no cover - openai が未インストールの場合の補助
-    from openai import OpenAI as _RuntimeOpenAI
-except ImportError as exc:  # pragma: no cover - 実行環境に依存
-    OpenAI = None
-    AsyncOpenAI = None
-    _OPENAI_IMPORT_ERROR: ImportError | None = exc
-    _ASYNC_OPENAI_IMPORT_ERROR: ImportError | None = exc
-else:
-    OpenAI = cast(type[Any], _RuntimeOpenAI)
-    _OPENAI_IMPORT_ERROR = None
-    try:  # pragma: no cover - 旧バージョンで AsyncOpenAI が未提供の場合
-        from openai import AsyncOpenAI as _RuntimeAsyncOpenAI
-    except ImportError as async_exc:
-        AsyncOpenAI = None
-        _ASYNC_OPENAI_IMPORT_ERROR = async_exc
-    else:
-        AsyncOpenAI = cast(type[Any], _RuntimeAsyncOpenAI)
-        _ASYNC_OPENAI_IMPORT_ERROR = None
 
 
 ParsedModelT = TypeVar("ParsedModelT", bound=BaseModel)
@@ -49,7 +28,9 @@ class LLMCallTool(BaseTools):
     client_options: dict[str, Any] = field(default_factory=dict)
     debug: bool = False
     _client: Any = field(init=False, default=None, repr=False)
-    _async_client: Any = field(init=False, default=None, repr=False)
+    _async_clients: WeakKeyDictionary[asyncio.AbstractEventLoop, Any] = field(
+        init=False, default_factory=WeakKeyDictionary, repr=False
+    )
     _opik_client: Opik | None = field(init=False, default=None, repr=False)
     _opik_config_signature: tuple[str | None, str | None, str | None] | None = field(
         init=False, default=None, repr=False
@@ -59,7 +40,35 @@ class LLMCallTool(BaseTools):
     # BaseTools interface
     # ------------------------------------------------------------------
     def stop(self) -> None:
-        return None
+        if self._client is not None:
+            close = getattr(self._client, "close", None)
+            if callable(close):
+                try:
+                    close()
+                except Exception:
+                    pass
+            self._client = None
+
+        for loop, client in list(self._async_clients.items()):
+            aclose = getattr(client, "aclose", None)
+            if callable(aclose):
+                try:
+                    asyncio.run(aclose())
+                except RuntimeError:
+                    try:
+                        loop.run_until_complete(aclose())
+                    except Exception:
+                        pass
+                except Exception:
+                    pass
+            else:
+                close = getattr(client, "close", None)
+                if callable(close):
+                    try:
+                        close()
+                    except Exception:
+                        pass
+        self._async_clients.clear()
 
     def save(self) -> None:
         return None
@@ -149,11 +158,8 @@ class LLMCallTool(BaseTools):
             max_output_tokens=max_output_tokens,
             **params,
         )
-        print(payload, file=open("a", "w"))
         if use_parse:
-            output= await client.responses.parse(**payload)
-            print(output, file=open("b", "w"))
-            return output
+            return await client.responses.parse(**payload)
         return await client.responses.create(**payload)
 
     def call_text(
@@ -339,36 +345,9 @@ class LLMCallTool(BaseTools):
             self._log_debug("call_parsed_async:cancelled", None)
             raise
         except Exception as exc:
-            error_payload = {
-                "error_type": type(exc).__name__,
-                "error": repr(exc),
-                "traceback": traceback.format_exc(),
-            }
-            response_payload: Any = None
-            response_obj = getattr(exc, "response", None)
-            if response_obj is not None:
-                response_payload = self._safe_model_dump(response_obj)
-                error_payload["response"] = response_payload
-                status = getattr(response_obj, "status_code", None)
-                if status is not None:
-                    error_payload["status_code"] = status
-                try:
-                    if hasattr(response_obj, "json"):
-                        error_payload["response_json"] = response_obj.json()
-                    elif hasattr(response_obj, "content"):
-                        error_payload["response_content"] = getattr(response_obj, "content")
-                except Exception as response_exc:  # pragma: no cover - ログ用フォールバック
-                    error_payload["response_dump_error"] = repr(response_exc)
-            else:
-                body = getattr(exc, "body", None)
-                if body is not None:
-                    error_payload["response_body"] = body
-                json_body = getattr(exc, "json_body", None)
-                if json_body is not None:
-                    error_payload["response_json_body"] = json_body
             self._log_debug(
                 "call_parsed_async:error",
-                error_payload,
+                {"error": repr(exc)},
             )
             raise
         self._log_debug(
@@ -377,31 +356,10 @@ class LLMCallTool(BaseTools):
         )
         parsed = getattr(response, "output_parsed", None)
         if parsed is None:
-            response_dump = self._safe_model_dump(response)
-            self._log_debug(
-                "call_parsed_async:missing_output_parsed",
-                response_dump,
-            )
-            raise RuntimeError(
-                "Responses API から構造化出力が得られませんでした。"
-                f" response={response_dump}"
-            )
+            raise RuntimeError("Responses API から構造化出力が得られませんでした。")
         if isinstance(parsed, parse_model):
             return parsed
-        try:
-            return parse_model.model_validate(parsed)
-        except Exception as exc:
-            self._log_debug(
-                "call_parsed_async:validation_error",
-                {
-                    "error_type": type(exc).__name__,
-                    "error": repr(exc),
-                    "traceback": traceback.format_exc(),
-                    "response": self._safe_model_dump(response),
-                    "parsed": parsed,
-                },
-            )
-            raise
+        return parse_model.model_validate(parsed)
 
     # ------------------------------------------------------------------
     # Helpers
@@ -509,11 +467,6 @@ class LLMCallTool(BaseTools):
         logger.debug("{} {}", label, serialized)
 
     def _ensure_client(self) -> Any:
-        if OpenAI is None:
-            raise RuntimeError(
-                "openai パッケージが見つかりません。`pip install openai` を実行してください。"
-            ) from _OPENAI_IMPORT_ERROR
-
         if self._client is None:
             api_key = self.api_key or os.getenv("OPENAI_API_KEY")
             if not api_key:
@@ -525,21 +478,23 @@ class LLMCallTool(BaseTools):
         return self._client
 
     def _ensure_async_client(self) -> Any:
-        if AsyncOpenAI is None:
-            raise RuntimeError(
-                "openai パッケージの AsyncOpenAI が利用できません。"
-            ) from _ASYNC_OPENAI_IMPORT_ERROR
+        loop = asyncio.get_running_loop()
+        client = self._async_clients.get(loop)
+        if client is not None:
+            return client
 
-        if self._async_client is None:
-            api_key = self.api_key or os.getenv("OPENAI_API_KEY")
-            if not api_key:
-                raise RuntimeError(
-                    "OPENAI_API_KEY が設定されていません。OpenAI の API キーを環境変数に設定してください。"
-                )
-            self._async_client = AsyncOpenAI(
-                api_key=api_key, **self.client_options)
-            self._async_client = self._configure_opik_tracking(self._async_client)
-        return self._async_client
+        api_key = self.api_key or os.getenv("OPENAI_API_KEY")
+        if not api_key:
+            raise RuntimeError(
+                "OPENAI_API_KEY が設定されていません。OpenAI の API キーを環境変数に設定してください。"
+            )
+        client = AsyncOpenAI(api_key=api_key, **self.client_options)
+        client = self._configure_opik_tracking(client)
+        # 各エージェントはスレッドごとに独立したイベントループを持つため、
+        # ループ間で AsyncOpenAI を共有すると `RuntimeError` が発生する。
+        # ループごとにクライアントをキャッシュし、再利用ループでのみ共有する。
+        self._async_clients[loop] = client
+        return client
 
     def _configure_opik_tracking(self, openai_client: Any) -> Any:
         opik_client = self._ensure_opik_client()

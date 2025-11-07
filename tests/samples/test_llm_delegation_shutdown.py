@@ -174,3 +174,33 @@ async def _run_stop_before_start_scenario() -> None:
     await asyncio.wait_for(agent.run_async(tools), timeout=0.5)
 
     assert not llm.called
+
+
+def test_llm_dispatch_polling_does_not_cancel_task() -> None:
+    asyncio.run(_run_llm_dispatch_polling_scenario())
+
+
+async def _run_llm_dispatch_polling_scenario() -> None:
+    agent = DelegationLLMAgent(
+        agent_id="front_desk_agent",
+        system_prompt="system",
+        model="gpt-5-mini",
+    )
+    stop_event = asyncio.Event()
+
+    async def delayed_response() -> StructuredChannelResponse:
+        await asyncio.sleep(0.15)
+        return StructuredChannelResponse(
+            output_channel="analysis_workspace",
+            message=StructuredChannelMessage(role="analysis_summary", content="ok"),
+        )
+
+    task = asyncio.create_task(delayed_response())
+    result = await asyncio.wait_for(
+        agent._await_llm_dispatch(task, stop_event, poll_interval=0.05),
+        timeout=1.0,
+    )
+
+    assert isinstance(result, StructuredChannelResponse)
+    assert not task.cancelled()
+    assert result.message.content == "ok"
