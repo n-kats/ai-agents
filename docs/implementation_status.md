@@ -54,8 +54,8 @@
 - [ ] `InputTool` はダミー実装のままで、実運用向けツールは未提供。
 
 ## ドキュメントとサンプル
-- [x] ExecPlan ガイドラインを [docs/meta_plan/exec_plan_guidelines.md](./meta_plan/exec_plan_guidelines.md) に整備。
-- [x] ワークフロー追加手順を [docs/meta_plan/workflow_addition_guidelines.md](./meta_plan/workflow_addition_guidelines.md) に整備。
+- [x] ExecPlan ガイドラインを [docs/workflows/exec_plan_guidelines.md](./workflows/exec_plan_guidelines.md) に整備。
+- [x] ワークフロー追加手順を [docs/workflows/workflow_addition_guidelines.md](./workflows/workflow_addition_guidelines.md) に整備。
 - [ ] ドキュメントはコンセプト草案のみで、API リファレンスや実装ガイドは未整備（[docs/concept.md](./concept.md)）。
 - [x] サンプル実装ガイドラインを [docs/samples_guideline.md](./samples_guideline.md) に集約。
 - [x] InMemory チャネルデモ（`samples/in_memory_channels.py`）に `MessageTools.fetch_messages()` を組み込み、既読メッセージの履歴復元手順をログで確認可能にした。

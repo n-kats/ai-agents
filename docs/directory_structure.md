@@ -7,6 +7,7 @@
 - `docs/` : 現行アーキテクチャや運用方針をまとめたドキュメント。
 - `docs/legacy/` : 過去の Research Agent 系資料や振り返りログ。参照のみ。
 - `docs/meta_plan/` : 共通ガイドラインやポリシー類。プロジェクト横断で再利用可能な内容を配置。
+- `docs/workflows/` : ExecPlan や追加ワークフローなど標準手順のガイドライン。
 - `docs/usage/` : `make lint` などのコマンドリファレンス。
 - `docker/` : Docker Compose など環境構築用ファイル（PostgreSQL チャンネル基盤を追加予定）。
 - `samples/` : フレームワークを体験するための最小サンプルコードと手順。
@@ -28,11 +29,12 @@
 - `implementation_status.md` : 実装進捗チェックリスト。
 - `features/` : 機能別ドキュメント。例: Textual 人間エージェント UI の概要。
 - `channel_persistence_plan.md` : PostgreSQL を用いたチャンネル永続化案。
-- `channel_spec.md` : チャンネル仕様の決定事項および未解決課題のまとめ。
+- `specs/` : 機能やチャネルなどの仕様ドキュメント（例: `specs/channel_spec.md`）。
 - `samples_guideline.md` : `samples/` 配下のサンプル実装方針と運用ルール。
 - `shortcut_continue.md` : 「続けて」指示時に参照すべき資料をまとめたショートカットメモ。
 - `directory_structure.md` : 本ファイル。
 - `meta_plan/` : 共通ガイドライン。
+- `workflows/` : ワークフロー別ガイドライン（ExecPlan / ライブラリ知識共有 / ワークフロー追加手順など）。
 - `legacy/` : 旧資料。
 - `usage/` : コマンドチートシート。
 

@@ -1,6 +1,6 @@
 # チャンネルとメッセージ処理の概要（人間向けメモ）
 
-このドキュメントは、開発者が「エージェント間メッセージがどの層でどう扱われるか」を素早く把握できるようにまとめた概要です。設計詳細は [docs/channel_spec.md](../channel_spec.md) や [docs/exec_plan_message_database.md](../exec_plan_message_database.md) を参照してください。
+このドキュメントは、開発者が「エージェント間メッセージがどの層でどう扱われるか」を素早く把握できるようにまとめた概要です。設計詳細は [docs/specs/channel_spec.md](../specs/channel_spec.md) や [docs/exec_plan_message_database.md](../exec_plan_message_database.md) を参照してください。
 
 ## 全体像
 - **チャネル管理**: `ChannelManager` がチャネル ID の発番、メタデータ登録、エージェントの参加/離脱を担当します。所属情報は `channel_channels`（チャネル定義）と `channel_memberships`（所属）に保存されます。
@@ -56,7 +56,7 @@ flowchart LR
 - InMemory バックエンドを利用する軽量構成では、`MessageTools.save()` により `ChannelRepository.replace_unread_records()` が呼ばれ、未読スナップショットを明示的に保存する必要があります。
 
 ## 便利な参照ドキュメント
-- [docs/channel_spec.md](../channel_spec.md): コンポーネントごとの責務・決定事項。
+- [docs/specs/channel_spec.md](../specs/channel_spec.md): コンポーネントごとの責務・決定事項。
 - [docs/exec_plan_message_database.md](../exec_plan_message_database.md): DB バックエンド実装の背景と手順。
 - [docs/channel_persistence_plan.md](../channel_persistence_plan.md): テーブル設計と Docker/PostgreSQL 連携方針。
 - `samples/in_memory_channels.py`: ChannelTools / MessageTools を組み合わせた最小サンプル。

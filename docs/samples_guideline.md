@@ -18,7 +18,7 @@
 
 ## 追加時のチェックリスト
 1. `samples/README.md` にサンプルの目的・実行方法・補足事項を追記する。
-2. 新規エージェント設定やツールを導入する場合、`docs/` の関連仕様（例: [docs/channel_spec.md](./channel_spec.md)、[docs/concept.md](./concept.md)）を更新し、影響範囲を明記する。
+2. 新規エージェント設定やツールを導入する場合、`docs/` の関連仕様（例: [docs/specs/channel_spec.md](./specs/channel_spec.md)、[docs/concept.md](./concept.md)）を更新し、影響範囲を明記する。
 3. 必要に応じてテスト（`tests/samples/` など）を追加し、`make test` で検証可能な状態を保つ。
 4. 環境固有の制約（例: イベントループやサンドボックスによるモジュール利用制限）がある場合は、サンプル内コメントと README の双方で理由を説明する。
 5. 外部サービスや LLM API を利用する場合は、必要なパッケージ・環境変数・モデル名を README とコメントに明示する。

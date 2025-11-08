@@ -7,7 +7,7 @@
 - [docs/implementation_status.md](./implementation_status.md) : チャンネル検索／参加周りのチェック項目が更新されているので、未完タスクの把握に必須。
 
 ## 2. チャンネル仕様と既存決定事項
-- [docs/channel_spec.md](./channel_spec.md) : `ChannelManager.search_channels` や `ChannelTools.join_matching` の振る舞い、および残課題（アクセス制御や検索条件拡張など）の整理を確認。
+- [docs/specs/channel_spec.md](./specs/channel_spec.md) : `ChannelManager.search_channels` や `ChannelTools.join_matching` の振る舞い、および残課題（アクセス制御や検索条件拡張など）の整理を確認。
 
 ## 3. コア実装の読みどころ
 - `nkaa/framework/channels/manager.py` : `search_channels` を含むマネージャの中核ロジック。未読キュー復元やメンバーシップ管理の流れもここで把握。
@@ -20,4 +20,4 @@
 
 ## 使い方メモ
 - 作業を再開する際は 1 → 4 の順で目を通すと、全体状況 → 仕様 → 実装 → テストの流れを最短で復習できる。
-- 新しい検索条件やフローを追加する場合は、上記ファイルに加えてドキュメントの更新箇所を [docs/channel_spec.md](./channel_spec.md) → [docs/implementation_status.md](./implementation_status.md) の順に検討する。
+- 新しい検索条件やフローを追加する場合は、上記ファイルに加えてドキュメントの更新箇所を [docs/specs/channel_spec.md](./specs/channel_spec.md) → [docs/implementation_status.md](./implementation_status.md) の順に検討する。
