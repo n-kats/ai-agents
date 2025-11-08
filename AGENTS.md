@@ -8,8 +8,11 @@
      - `nkaa/`: フレームワーク本体（エージェント・チャネル抽象）
      - `docs/`: 仕様・運用ドキュメント全般
      - `docs/workflows/`: ExecPlan や追加ワークフローなど特殊手順のガイド
+     - `docs/plans/`: 具体的な実装計画や永続化プランの記録（ExecPlan は `docs/workflows/` に保持）
      - `docs/specs/`: 機能・チャネルなどの仕様ドキュメント
-     - `docs/meta_plan/`: コーディング指針や共通ポリシー集
+     - `docs/guides/`: サンプル方針や再開手順などの運用ガイド
+     - `docs/meta_plan/`: 再利用テンプレートや横断的な長期計画メモ（ガイドライン本文は `docs/guides/` に集約）
+     - `docs/notes/`: 開発メモや検討ログ
      - `samples/`: 最小サンプルコードと手順
      - `_tmp/`: 一時ファイル置き場（成果物は正式ドキュメントへ記載しない）
    - 上記で不足する場合や広い影響を持つ作業では `docs/directory_structure.md` を参照し、関連仕様書と資料の所在を特定する。
@@ -17,12 +20,12 @@
 
 2. 作業中
    - 仕様や未解決事項は担当ドキュメント（例: `docs/specs/channel_spec.md`、`docs/concept.md`）に随時反映し、複数ファイルに関係する場合は相互リンクを付ける。
-   - サンプルの新設・改訂は `docs/samples_guideline.md` に従い、実装・ドキュメント・テストを同時更新する。
+   - サンプルの新設・改訂は `docs/guides/samples_guideline.md` に従い、実装・ドキュメント・テストを同時更新する。
    - パッケージ再編や機能拡張に着手した場合は、並行して `docs/directory_structure.md` と `docs/concept.md` の整合性を保つ。
 
 3. 完了後
    - `docs/implementation_status.md` の該当項目を更新し、完了／保留／フォローアップの状態と参照リンクを記録する。
-   - ユーザーから「続けて」と指示された場合は `docs/shortcut_continue.md` を参照し、再開時に確認すべき資料の順番を示す。
+   - ユーザーから文脈なく「続けて」と指示された場合は `docs/guides/shortcut_continue.md` を参照し、再開時に確認すべき資料の順番を示す。
 
 ## ワークフロー
 - **ExecPlan ワークフロー**  

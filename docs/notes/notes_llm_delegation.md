@@ -7,7 +7,7 @@
 - LLM 呼び出しは `await invoke_structured_llm(...)` を通じて行い、受付／分析ごとの専用システムプロンプトと構造化レスポンス（`StructuredChannelResponse`）を利用する。`asyncio.CancelledError` を伝播する設計にし、停止要求時に未完了コールを確実にキャンセルできるようにする。
 - システムプロンプトは、形式ではなく役割・判断手順・出力内容を自然言語で規定し、`message.content` には人間がそのまま読める報告文を生成する方針とする。
 - 受付プロンプトは「要約／背景・制約／分析で深掘りすべき観点／推奨アクション」、分析プロンプトは「状況整理／分析結果／推奨アクション／リスク・懸念／追加で確認したい事項」の固定見出しテンプレートを要求し、LLM に具体的な文章構造を提供する。
-- プロンプト設計のコツは [docs/notes_llm_prompt_template.md](./notes_llm_prompt_template.md) にまとめ、入力セクション化・本文テンプレート化・BaseModel への委譲などの手法を共通化する。
+- プロンプト設計のコツは [docs/notes/notes_llm_prompt_template.md](./notes_llm_prompt_template.md) にまとめ、入力セクション化・本文テンプレート化・BaseModel への委譲などの手法を共通化する。
 
 ## 過去構成の課題
 - 受付と思考のエージェントクラスが分かれており、`run` ループやチャネル解決処理がほぼ重複していた。

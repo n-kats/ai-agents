@@ -6,8 +6,12 @@
 - `nkaa/` : フレームワーク本体。基盤コード、プリセット、旧研究用実装を含みます。
 - `docs/` : 現行アーキテクチャや運用方針をまとめたドキュメント。
 - `docs/legacy/` : 過去の Research Agent 系資料や振り返りログ。参照のみ。
-- `docs/meta_plan/` : 共通ガイドラインやポリシー類。プロジェクト横断で再利用可能な内容を配置。
+- `docs/meta_plan/` : 再利用可能なテンプレートや横断的な計画メモを格納（個別ガイドライン本文は `docs/guides/` へ移動）。
 - `docs/workflows/` : ExecPlan や追加ワークフローなど標準手順のガイドライン。
+- `docs/plans/` : 具体的な実装計画を記録するエリア（永続化プラン、検証ログなど）。
+- `docs/guides/` : サンプル方針やショートカットなどの運用ガイド。
+- `docs/specs/` : 機能仕様やチャネル仕様などのリファレンス。
+- `docs/notes/` : 開発メモや検討ログ。
 - `docs/usage/` : `make lint` などのコマンドリファレンス。
 - `docker/` : Docker Compose など環境構築用ファイル（PostgreSQL チャンネル基盤を追加予定）。
 - `samples/` : フレームワークを体験するための最小サンプルコードと手順。
@@ -27,13 +31,12 @@
 ## `docs/` 配下
 - `concept.md` : 現行コンセプトと設計概要。
 - `implementation_status.md` : 実装進捗チェックリスト。
-- `features/` : 機能別ドキュメント。例: Textual 人間エージェント UI の概要。
-- `channel_persistence_plan.md` : PostgreSQL を用いたチャンネル永続化案。
+- `plans/` : 具体的な実装計画や永続化プランを記録する場所（ExecPlan は `docs/workflows/` に保持）。
 - `specs/` : 機能やチャネルなどの仕様ドキュメント（例: `specs/channel_spec.md`）。
-- `samples_guideline.md` : `samples/` 配下のサンプル実装方針と運用ルール。
-- `shortcut_continue.md` : 「続けて」指示時に参照すべき資料をまとめたショートカットメモ。
+- `guides/` : サンプル方針・ショートカット・運用ルールなどの手順書。
+- `notes/` : 開発メモや調査ログ。試行中の知見をまとめる。
 - `directory_structure.md` : 本ファイル。
-- `meta_plan/` : 共通ガイドライン。
+- `meta_plan/` : テンプレートや横断計画メモ。
 - `workflows/` : ワークフロー別ガイドライン（ExecPlan / ライブラリ知識共有 / ワークフロー追加手順など）。
 - `legacy/` : 旧資料。
 - `usage/` : コマンドチートシート。

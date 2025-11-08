@@ -1,6 +1,6 @@
 # Samples
 
-`samples/` にはフレームワークの主要機能を最小構成で体験できるスクリプトを配置します。追加・更新時は `docs/samples_guideline.md` の方針に従って構成とドキュメントを整備してください。
+`samples/` にはフレームワークの主要機能を最小構成で体験できるスクリプトを配置します。追加・更新時は `docs/guides/samples_guideline.md` の方針に従って構成とドキュメントを整備してください。
 
 ## InMemory チャネルデモ（StandardManager 使用）
 - ファイル: `samples/in_memory_channels.py`

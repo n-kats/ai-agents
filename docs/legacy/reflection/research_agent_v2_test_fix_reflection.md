@@ -52,6 +52,6 @@
 
 ## 関連ドキュメント
 
-- [docs/meta_plan/docs_guidelines.md](../meta_plan/docs_guidelines.md)
-- [docs/meta_plan/comment_guidelines.md](../meta_plan/comment_guidelines.md)
+- [docs/guides/docs_guidelines.md](../guides/docs_guidelines.md)
+- [docs/guides/comment_guidelines.md](../guides/comment_guidelines.md)
 - [docs/meta_plan/development_roadmap.md](../meta_plan/development_roadmap.md)

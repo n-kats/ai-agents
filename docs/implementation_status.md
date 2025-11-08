@@ -19,7 +19,7 @@
 - [x] メッセージ配送と未読キュー管理を `MessageManager` として独立させ、`ChannelManager` はチャネルメタデータとメンバーシップ管理に専念（`ChannelManager.leave_agent()` から `MessageManager` 経由で未読ポインタを破棄）。
 - [x] `MessageRouteProvider` 抽象を導入し、`MessageManager` をチャネル管理から切り離してルーティングを差し替え可能にした（標準構成は `ChannelMessageRouteProvider`）。
 - [x] loguru ベースのログ基盤を整備し、`configure_logging`・`LogBufferSink`・`LogStream`・`AgentLogTool`・`LogPanelAdapter` を提供。
-- [x] メッセージ未読キューのデータベース常時永続化とバックエンド切り替えを実装（[docs/exec_plan_message_database.md](./exec_plan_message_database.md) 参照）。
+- [x] メッセージ未読キューのデータベース常時永続化とバックエンド切り替えを実装（[docs/plans/exec_plan_message_database.md](./plans/exec_plan_message_database.md) 参照）。
   - [x] `channel_unread` に `(agent_id, priority, enqueued_at, id)` の複合インデックスを追加し、`allowed_channels` フィルタの回帰テストを整備。
   - [x] `MessageTools.fetch_message(s)` を追加し、既読後の履歴をチャネル ID / メッセージ ID から再取得できるようにした。
 - [x] `MessageManager.list_channel_messages()` / `MessageTools.list_channel_messages()` を実装し、チャネル全体の履歴確認やレポート生成を簡易化。
@@ -45,7 +45,7 @@
   - [x] `shutdown_grace_period` を撤廃し、停止時は即時キャンセルのみを行う構成へ整理（LLM タイムアウト仕様を削除）。
   - [x] 擬似 LLM で停止回避ケースを再現するテスト（`tests/samples/test_llm_delegation_shutdown.py`）を追加。
   - [x] チャネル経路とは独立した停止シグナル `StopMessage` を導入し、`MessageTools.read_async()` で協調停止を通知できるようにした。
-  - [ ] 詳細計画は [docs/features/async_llm_shutdown.md](./features/async_llm_shutdown.md) を参照（継続タスク）。
+  - [ ] 詳細計画は [docs/plans/async_llm_shutdown.md](./plans/async_llm_shutdown.md) を参照（継続タスク）。
 
 ## プリセット
 - [x] シングルエージェント向けプリセットとツール束ねの例を追加（`nkaa/presets/managers/single_agent_model.py`）。
@@ -57,7 +57,7 @@
 - [x] ExecPlan ガイドラインを [docs/workflows/exec_plan_guidelines.md](./workflows/exec_plan_guidelines.md) に整備。
 - [x] ワークフロー追加手順を [docs/workflows/workflow_addition_guidelines.md](./workflows/workflow_addition_guidelines.md) に整備。
 - [ ] ドキュメントはコンセプト草案のみで、API リファレンスや実装ガイドは未整備（[docs/concept.md](./concept.md)）。
-- [x] サンプル実装ガイドラインを [docs/samples_guideline.md](./samples_guideline.md) に集約。
+- [x] サンプル実装ガイドラインを [docs/guides/samples_guideline.md](./guides/samples_guideline.md) に集約。
 - [x] InMemory チャネルデモ（`samples/in_memory_channels.py`）に `MessageTools.fetch_messages()` を組み込み、既読メッセージの履歴復元手順をログで確認可能にした。
 - [x] SQLite チャネル永続化サンプル（`samples/sqlite_channels.py`）を追加し、`SQLChannelRepository` と `MessageTools.fetch_messages()` による再起動復元フローを実行可能にした。
 - [x] LLM 協調サンプルを `samples/llm_delegation.py` として追加し、複数チャネルを活用する例を提示。

@@ -6,4 +6,4 @@
 - `reflection/` : Research Agent v1/v2 の振り返りメモやテスト修正の振り返り (`test_fix_reflection.md` など)
 - `meta/` : 旧設計時代のディレクトリ構造・ドキュメント運用方針などのガイドライン
 
-最新のアーキテクチャや運用ガイドは `docs/` 直下のファイル（`concept.md`, `implementation_status.md`, `channel_persistence_plan.md` など）を参照してください。
+最新のアーキテクチャや運用ガイドは `docs/` 直下のファイル（`concept.md`, `implementation_status.md`, `plans/channel_persistence_plan.md` など）を参照してください。

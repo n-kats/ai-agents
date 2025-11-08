@@ -105,6 +105,6 @@ print("Restored unread:", restored_message.payload if restored_message else None
 ```
 
 ## 関連資料
-- [docs/channel_persistence_plan.md](./channel_persistence_plan.md) : PostgreSQL を用いた永続化設計案。
+- [docs/plans/channel_persistence_plan.md](../plans/channel_persistence_plan.md) : PostgreSQL を用いた永続化設計案。
 - [docs/implementation_status.md](./implementation_status.md) : チャネル実装に関する進捗と残タスク。
 - `tests/framework/test_channels.py` : InMemory 実装でチャネルの送受信や復元を確認するテスト。

@@ -11,7 +11,7 @@
   - `nkaa/framework/channels/repository.py`: チャネルメタデータとメッセージ履歴の永続化ロジック。
   - `nkaa/framework/message_manager.py`: メッセージ配送および未読キュー制御。
   - `nkaa/framework/channels/queue.py`: 受信者ごとの優先度付きキュー（現在はプロセス内メモリのみ）。
-  - [docs/channel_persistence_plan.md](./channel_persistence_plan.md), [README_dev.md](../README_dev.md): DB を使ったメッセージ基盤の構想を記載。
+  - [docs/plans/channel_persistence_plan.md](./channel_persistence_plan.md), [README_dev.md](../README_dev.md): DB を使ったメッセージ基盤の構想を記載。
 - 用語定義:
   - **メッセージストア**: チャネル単位の履歴と未読キューを永続化する DB 層。
   - **未読ポインタ**: 受信すべきメッセージをエージェント × チャネル × message_id で指し示す行。
@@ -37,7 +37,7 @@
    - デキュー順序（priority → enqueued_at → id）、チャネル離脱時の未読削除、未読スナップショット再構築（`MessageManager.snapshot_unread_records` が DB バックエンドでも矛盾しない）をテストケースとして増補する。
 5. **ドキュメント/進捗更新**  
    - `README_dev.md` の「チャンネル」セクションに新しいテーブル構成と `MessageStoreBackend` の概念図を追加し、実装済みの操作フロー（送信→永続化→未読登録→受信→削除）を箇条書きで説明する。  
-   - [docs/channel_persistence_plan.md](./channel_persistence_plan.md) の「データモデル」「Python 実装メモ」を今回の実装と一致させ、[docs/implementation_status.md](./implementation_status.md) の該当チェックリストに進捗を記録する。
+   - [docs/plans/channel_persistence_plan.md](./channel_persistence_plan.md) の「データモデル」「Python 実装メモ」を今回の実装と一致させ、[docs/implementation_status.md](../implementation_status.md) の該当チェックリストに進捗を記録する。
 
 ## 具体的な作業手順
 ```bash
@@ -58,7 +58,7 @@ UV_PROJECT_ENVIRONMENT=_tmp/codex_venv uv run pytest tests/framework/test_channe
 ## 検証と受け入れ条件
 - SQLite で `pytest tests/framework/test_channels.py -k database` がパスし、メッセージ送受信・未読復元が DB バックエンドでも機能すること。
 - In-memory バックエンドを用いた既存テストが退行しないこと（`pytest tests/framework/test_channels.py -k memory`）。
-- README_dev.md と channel_persistence_plan に記載した設計と実装が整合していることをレビューで確認する。
+- README_dev.md と `docs/plans/channel_persistence_plan.md` に記載した設計と実装が整合していることをレビューで確認する。
 
 ## 再実行性と復旧手順
 - SQLAlchemy の `create_all` を利用してテーブルを毎回再構築できるようにし、`StaticPool` を使った in-memory SQLite で deterministic な再現を担保する。
