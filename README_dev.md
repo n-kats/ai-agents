@@ -59,7 +59,7 @@
 
 # 現状把握メモ
 * `MessageManager.snapshot_unread_records()` で未読キューを取得し、`MessageTools.save()` が担当エージェント分をリポジトリへ反映。
-* プリセット：`nkaa/presets/managers/single_agent_model.py` が単体エージェント例。`SingleAgentTools` に LLM ダミー (`LLMCallTool`)・ログ・入力・停止関数を束ねる。
+* プリセット：`src/nkaa/presets/managers/single_agent_model.py` が単体エージェント例。`SingleAgentTools` に LLM ダミー (`LLMCallTool`)・ログ・入力・停止関数を束ねる。
 * テスト：`tests/framework/test_channels.py` で InMemory リポジトリの送受信・復元・離脱を確認。
 * ドキュメント連携：設計メモは `docs/concept.md`、進捗は `docs/implementation_status.md`、チャンネル仕様は `docs/specs/channel_spec.md` に置いてある。
 * サンプル：`samples/in_memory_channels.py` を `python` で実行すると、`StandardManager` が InMemory チャネルを扱うエージェント群（送信・購読・スナップショット）をロードして協調動作を再現する。

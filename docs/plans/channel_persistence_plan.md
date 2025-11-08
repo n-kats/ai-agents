@@ -1,6 +1,6 @@
 # チャンネル永続化方針（PostgreSQL + Docker Compose）
 
-> **更新**: SQLAlchemy を利用した `SQLChannelRepository` を `nkaa/framework/channels/repository.py` に追加し、PostgreSQL / SQLite を含む RDBMS 上でチャネル履歴と未読情報を扱えるようになりました。本ドキュメントの設計方針は継続的な改善タスク（一括キュー処理や Docker Compose 化など）を整理する目的で維持しています。
+> **更新**: SQLAlchemy を利用した `SQLChannelRepository` を `src/nkaa/framework/channels/repository.py` に追加し、PostgreSQL / SQLite を含む RDBMS 上でチャネル履歴と未読情報を扱えるようになりました。本ドキュメントの設計方針は継続的な改善タスク（一括キュー処理や Docker Compose 化など）を整理する目的で維持しています。
 
 ## ゴール
 - チャンネルのプライマリキューを PostgreSQL / SQLite の `channel_unread` テーブルで運用し、優先度と投入時刻に `id` を加えた安定ソートでデキューできるようにする（実装済み: `SQLMessageQueueBackend`）。
@@ -63,5 +63,5 @@ docker/
 
 ## 次のステップ案
 1. `docker/channel/Dockerfile` と `docker/docker-compose.yml` を上記方針で初期化。必要なら Make タスクに `docker compose up nkaa-channel-db` を追加。
-2. `nkaa/framework/channel.py` を PostgreSQL バックエンド対応へ拡張し、`ChannelManager` から永続化層を呼び出す。
+2. `src/nkaa/framework/channel.py` を PostgreSQL バックエンド対応へ拡張し、`ChannelManager` から永続化層を呼び出す。
 3. pytest でデータベースを用いたキュー操作のテストを整備し（例: docker-compose で立ち上げた DB を前提に pytest fixture を作成）、優先度順・再取得・並列動作を確認する。

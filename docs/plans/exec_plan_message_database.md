@@ -6,11 +6,11 @@
 - 確認方法: SQLite（インメモリ）および PostgreSQL を対象に `pytest tests/framework/test_channels.py -k database` などのテストセットを通し、DB バックエンドで送受信・未読復元が可能であることを確認する。
 
 ## 状況と前提整理
-- レポジトリの現状: `ChannelRepository` 抽象はあるが、実際の `MessageQueue` は `nkaa/framework/channels/queue.py` にあるインメモリ実装のみで、[README_dev.md](../README_dev.md) が言及する DB ベースのメッセージストアは未整備。`SQLChannelRepository` は履歴保存と未読スナップショット置換を提供するだけで、リアルタイムの enqueue/dequeue はプロセス内に留まっている。
+- レポジトリの現状: `ChannelRepository` 抽象はあるが、実際の `MessageQueue` は `src/nkaa/framework/channels/queue.py` にあるインメモリ実装のみで、[README_dev.md](../README_dev.md) が言及する DB ベースのメッセージストアは未整備。`SQLChannelRepository` は履歴保存と未読スナップショット置換を提供するだけで、リアルタイムの enqueue/dequeue はプロセス内に留まっている。
 - 主要ファイル/モジュール:
-  - `nkaa/framework/channels/repository.py`: チャネルメタデータとメッセージ履歴の永続化ロジック。
-  - `nkaa/framework/message_manager.py`: メッセージ配送および未読キュー制御。
-  - `nkaa/framework/channels/queue.py`: 受信者ごとの優先度付きキュー（現在はプロセス内メモリのみ）。
+  - `src/nkaa/framework/channels/repository.py`: チャネルメタデータとメッセージ履歴の永続化ロジック。
+  - `src/nkaa/framework/message_manager.py`: メッセージ配送および未読キュー制御。
+  - `src/nkaa/framework/channels/queue.py`: 受信者ごとの優先度付きキュー（現在はプロセス内メモリのみ）。
   - [docs/plans/channel_persistence_plan.md](./channel_persistence_plan.md), [README_dev.md](../README_dev.md): DB を使ったメッセージ基盤の構想を記載。
 - 用語定義:
   - **メッセージストア**: チャネル単位の履歴と未読キューを永続化する DB 層。

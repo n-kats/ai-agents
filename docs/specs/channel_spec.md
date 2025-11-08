@@ -5,7 +5,7 @@
 
 ## コンポーネント構成
 
-### ChannelManager (`nkaa/framework/channels/manager.py`)
+### ChannelManager (`src/nkaa/framework/channels/manager.py`)
 - チャネル ID の発番とチャネルインスタンスの登録を担当する。
 - エージェントの参加 (`join_agent`)・離脱 (`leave_agent`) を管理し、所属チャネル情報をリポジトリへ反映する。
 - `search_channels` でチャネルメタデータを条件付きに列挙でき、エージェントの探索・購読フローに利用する。
@@ -13,33 +13,33 @@
 - リポジトリからチャネル・メンバーシップ情報を復元して起動時状態を再構成する。
 - 未読キューを扱うハンドラを外部から受け取り、離脱時に `attach_unread_handler` 経由で未読ポインタ破棄を委譲する。
 
-### MessageManager (`nkaa/framework/message_manager.py`)
+### MessageManager (`src/nkaa/framework/message_manager.py`)
 - メッセージ書き込み時に履歴を保存し、各エージェント専用キューへメッセージ ID と優先度を投入する（バックエンドは InMemory / SQL を自動選択）。
 - `read_for_agent` で未読キューからポインタを取り出し、リポジトリからメッセージ本体を解決する。
 - 未読スナップショット (`snapshot_unread_records`) を提供し、クラッシュ復旧向けのエクスポート／インポート処理を担う。
 - エージェント離脱時に `discard_agent_channels` を用いて該当チャネルのポインタを破棄する。
 - 送信先解決には `MessageRouteProvider` 抽象を利用する。既定では `ChannelMessageRouteProvider` を介して `ChannelManager` を適合させるが、将来的にチャネル以外のシステムメッセージ経路にも差し替え可能となる。
 
-### ChannelTools (`nkaa/framework/tools.py`)
+### ChannelTools (`src/nkaa/framework/tools.py`)
 - エージェントが利用するチャネルメタデータ操作の窓口。
 - `join/leave`・`search`・`join_matching` などの操作を `ChannelManager` に委譲する。
 - `save_channel` によりチャネル単体の永続化をトリガーできる。
 - `joined_channel_metadata()` により参加済みチャネルの `ChannelMetadata` を直接取得できる。プロンプト組み立てや UI 表示など、チャネル名と説明をエージェントへ渡す用途で活用する。
 - メッセージ送受信は `MessageTools` に切り出しており、`ChannelTools` はチャネル管理機能に専念する。
 
-### MessageTools (`nkaa/framework/tools.py`)
+### MessageTools (`src/nkaa/framework/tools.py`)
 - メッセージの送受信・未読スナップショット保存を `MessageManager` 経由で提供するツール。
 - `send/send_async` でチャネルへメッセージを投稿し、`read/read_async` で未読を取得する。
 - `save()` で担当エージェントの未読キューをスナップショットとして永続化する（InMemory バックエンドのみ）。SQL バックエンドでは常時 DB に保存されるため no-op。
 - 停止シグナル (`StopMessage`) を含めた協調停止を `read_async` で扱い、`stop_event` 連動によるキャンセルをサポートする。
 - `fetch_message` / `fetch_messages` で既読メッセージをチャネル ID・メッセージ ID から再取得し、再起動後のコンテキスト復元などに活用できる。
 
-### ChannelRepository (`nkaa/framework/channels/repository.py`)
+### ChannelRepository (`src/nkaa/framework/channels/repository.py`)
 - チャネルメタデータ、メッセージ履歴、未読レコード、所属情報を読み書きする抽象層。
 - 既定では `InMemoryChannelRepository` を使用し、`SQLChannelRepository` を通じて PostgreSQL / SQLite などの永続化層へ差し替えられる。
 - `persist_message` は永続層で採番した `message_id` を返却し、`ChannelManager` 側での未読管理に利用する。
 
-### MessageQueue (`nkaa/framework/channels/queue.py`)
+### MessageQueue (`src/nkaa/framework/channels/queue.py`)
 - 各エージェント専用の優先度付きキュー実装。InMemory バックエンドでは `MessageQueue` がそのまま利用され、SQL バックエンドでは `channel_unread` テーブルが永続キューとして機能する。
 - キュー要素はメッセージ本体ではなく `AgentMessagePointer`（チャネル ID、メッセージ ID、優先度、投入時刻）であり、履歴取得はリポジトリ経由で行う。
 - チャネルフィルタリング、未読スナップショット取得、チャネル離脱時の破棄操作をサポートする。SQL バックエンドでは `ORDER BY priority, enqueued_at, id` で取得し、取得と同時に行を削除する。

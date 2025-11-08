@@ -1,6 +1,6 @@
 .PHONY: lint format test test_with_api
-TARGET ?= nkaa
-LEGACY_DIR ?= nkaa/legacy
+TARGET ?= src/nkaa
+LEGACY_DIR ?= src/nkaa/legacy
 
 lint:
 	ruff check --extend-exclude $(LEGACY_DIR) $(TARGET)

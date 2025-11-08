@@ -25,9 +25,9 @@
 
 ## 参考
 - 既存の InMemory デモで利用している構成要素
-  - `nkaa/presets/managers/single_agent_model.py`: `StandardManager` の設定スキーマ。
-  - `nkaa/framework/channels/manager.py`: `ChannelManager` の基本操作。
-  - `nkaa/framework/tools.py`: `ChannelTools` によるチャネル操作ヘルパ。
+  - `src/nkaa/presets/managers/single_agent_model.py`: `StandardManager` の設定スキーマ。
+  - `src/nkaa/framework/channels/manager.py`: `ChannelManager` の基本操作。
+  - `src/nkaa/framework/tools.py`: `ChannelTools` によるチャネル操作ヘルパ。
   - `samples/in_memory_channels.py`: ガイドラインを実際に適用したサンプル。
   - `samples/llm_delegation.py`: 役割分担と複数チャネル連携を確認できる LLM デリゲーション例。
 

@@ -2,7 +2,7 @@
 
 ## 背景・目的
 
-`nkaa/research_agent_v2/methods/search/test_local_search.py` のテストが通らない状況を受けて、  
+`src/nkaa/research_agent_v2/methods/search/test_local_search.py` のテストが通らない状況を受けて、  
 テスト修正の工程・手順・反省点を記録し、今後の開発・保守・リファクタリング作業の品質向上に役立てることを目的とする。
 
 ---

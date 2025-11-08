@@ -5,7 +5,7 @@
 ## 標準ワークフロー
 1. 着手前
    - 軽微な修正や限定的な確認であれば、以下の簡易ガイドで構成を把握してから開始してもよい:
-     - `nkaa/`: フレームワーク本体（エージェント・チャネル抽象）
+     - `src/nkaa/`: フレームワーク本体（エージェント・チャネル抽象）
      - `docs/`: 仕様・運用ドキュメント全般
      - `docs/workflows/`: ExecPlan や追加ワークフローなど特殊手順のガイド
      - `docs/plans/`: 具体的な実装計画や永続化プランの記録（ExecPlan は `docs/workflows/` に保持）
@@ -38,16 +38,16 @@
   - **詳細**: `docs/workflows/workflow_addition_guidelines.md` を参照。このワークフローを実施時に必ず参照すること。
 
 ## プロジェクト構造とモジュール
-- コアフレームワークは `nkaa/framework/` に集約され、エージェントおよびチャネル抽象を提供する。
-- プリセットとアダプターは `nkaa/presets/` に配置し、新規エージェントやツールの統合を容易にする。
-- レガシー試作は `nkaa/legacy/research_agent_v1/` と `nkaa/legacy/research_agent_v2/` に保管し、参照のみで改変しない。
+- コアフレームワークは `src/nkaa/framework/` に集約され、エージェントおよびチャネル抽象を提供する。
+- プリセットとアダプターは `src/nkaa/presets/` に配置し、新規エージェントやツールの統合を容易にする。
+- レガシー試作は `src/nkaa/legacy/research_agent_v1/` と `src/nkaa/legacy/research_agent_v2/` に保管し、参照のみで改変しない。
 - 設計メモやチェックリストは `docs/concept.md` と `docs/implementation_status.md` を確認する。
 - ルート直下の `pyproject.toml`、`Makefile`、`config.yaml` が開発設定を管理する。
 
 ## ビルド・テスト・開発コマンド
 - Codex 実行環境では `_tmp/codex_venv` を専用の仮想環境として利用する。`UV_PROJECT_ENVIRONMENT=_tmp/codex_venv uv sync --group dev` を実行し、ホスト/コンテナ間で共通のパスを使う。
 - `uv` が利用できない場合は `python -m venv _tmp/codex_venv` で仮想環境を作成し、`source _tmp/codex_venv/bin/activate && pip install -e . && pip install ruff mypy pytest` を実行する。
-- `make lint` は Ruff と mypy を実行し、`nkaa/` 以下を静的チェックする。
+- `make lint` は Ruff と mypy を実行し、`src/nkaa/` 以下を静的チェックする。
 - `make format` は Ruff フォーマッタと自動修正を適用し、コードスタイルを揃える。
 - `make test` または `pytest` でテストを実行する。個別モジュールを対象にする場合は `pytest path/to/module` を利用する。
 
@@ -72,5 +72,5 @@
 
 ## エージェントとチャネルの実装ヒント
 - 実装前に `docs/concept.md` および `docs/implementation_status.md` の未完事項を確認し、方針を固める。
-- 新規エージェントは `StandardManager` と `nkaa/presets/managers/single_agent_model.py` のアダプターパターンを再利用する。
-- 実運用ツールは `nkaa/presets/tools/` を拡張し、設定オプションや依存関係をドキュメントへ反映する。
+- 新規エージェントは `StandardManager` と `src/nkaa/presets/managers/single_agent_model.py` のアダプターパターンを再利用する。
+- 実運用ツールは `src/nkaa/presets/tools/` を拡張し、設定オプションや依存関係をドキュメントへ反映する。

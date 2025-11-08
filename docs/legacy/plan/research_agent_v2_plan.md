@@ -25,7 +25,7 @@
 │   │   └── research_agent_v2_plan.md
 │   ├── reflection/
 │   └── usage/
-├── nkaa/
+├── src/nkaa/
 │   ├── __init__.py
 │   ├── py.typed
 │   ├── research_agent_v1/ ...

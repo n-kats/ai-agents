@@ -10,10 +10,10 @@
 - [docs/specs/channel_spec.md](../specs/channel_spec.md) : `ChannelManager.search_channels` や `ChannelTools.join_matching` の振る舞い、および残課題（アクセス制御や検索条件拡張など）の整理を確認。
 
 ## 3. コア実装の読みどころ
-- `nkaa/framework/channels/manager.py` : `search_channels` を含むマネージャの中核ロジック。未読キュー復元やメンバーシップ管理の流れもここで把握。
-- `nkaa/framework/channels/models.py` : `ChannelSearchQuery` のフィルタ条件定義。どのメタデータ項目が検索条件になるかの参照用。
-- `nkaa/framework/channels/repository.py` : InMemory/SQL 実装が `search` と連携するために必要な永続層の仕組みを確認。
-- `nkaa/framework/tools.py` : `ChannelTools.search` と `join_matching` のエージェント向け API。検索結果と参加処理の利用例を把握。
+- `src/nkaa/framework/channels/manager.py` : `search_channels` を含むマネージャの中核ロジック。未読キュー復元やメンバーシップ管理の流れもここで把握。
+- `src/nkaa/framework/channels/models.py` : `ChannelSearchQuery` のフィルタ条件定義。どのメタデータ項目が検索条件になるかの参照用。
+- `src/nkaa/framework/channels/repository.py` : InMemory/SQL 実装が `search` と連携するために必要な永続層の仕組みを確認。
+- `src/nkaa/framework/tools.py` : `ChannelTools.search` と `join_matching` のエージェント向け API。検索結果と参加処理の利用例を把握。
 
 ## 4. テストの参照ポイント
 - `tests/framework/test_channels.py` : チャンネル検索・自動参加のテストケース `test_channel_search_and_auto_join` を確認し、期待挙動を具体例で把握。

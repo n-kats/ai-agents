@@ -2,7 +2,7 @@
 
 ## 概要
 
-本ドキュメントは、`nkaa/research_agent_v2/methods/search/test_local_search.py` のテストが通らない状況を修正した際の工程・手順・反省点を記録するものである。今後のテスト修正やリファクタリング作業の参考とする。
+本ドキュメントは、`src/nkaa/research_agent_v2/methods/search/test_local_search.py` のテストが通らない状況を修正した際の工程・手順・反省点を記録するものである。今後のテスト修正やリファクタリング作業の参考とする。
 
 ---
 
