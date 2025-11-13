@@ -134,22 +134,17 @@ TManagerTools = TypeVar("TManagerTools", bound=BaseTools)
 
 
 class _StopEvent(Protocol):
-    def wait(self, timeout: float | None = None) -> bool:
-        ...
+    def wait(self, timeout: float | None = None) -> bool: ...
 
-    def set(self) -> None:
-        ...
+    def set(self) -> None: ...
 
 
 class _WorkerHandle(Protocol):
-    def start(self) -> None:
-        ...
+    def start(self) -> None: ...
 
-    def join(self, timeout: float | None = None) -> None:
-        ...
+    def join(self, timeout: float | None = None) -> None: ...
 
-    def is_alive(self) -> bool:
-        ...
+    def is_alive(self) -> bool: ...
 
 
 def _run_agent_worker(agent: "BaseAgent[Any]", tools: BaseTools) -> None:
@@ -293,8 +288,7 @@ class StandardManager(BaseManager, Generic[TManagerConfig, TManagerTools, TTools
 
         assert self.agent_processes == [], "Manager is already running."
         agent_contexts: list[tuple[BaseAgent[TTools], TTools]] = [
-            (agent, self.apply_adapter(agent))
-            for agent in self.agents
+            (agent, self.apply_adapter(agent)) for agent in self.agents
         ]
 
         self.agent_processes = [
@@ -354,11 +348,7 @@ class StandardManager(BaseManager, Generic[TManagerConfig, TManagerTools, TTools
             raise ValueError("adapter must be provided")
 
         config = config_factory(storage_dir)
-        tools = (
-            tools_factory(config)
-            if tools_factory is not None
-            else cast(TManagerTools, config.build_tools())
-        )
+        tools = tools_factory(config) if tools_factory is not None else cast(TManagerTools, config.build_tools())
 
         return cls(
             config,

@@ -13,8 +13,7 @@ from .repository import ChannelRepository
 class UnreadQueueHandler(Protocol):
     """離脱時に未読ポインタを破棄するためのハンドラ抽象。"""
 
-    def discard_agent_channels(self, agent_id: str, channel_ids: Iterable[str]) -> None:
-        ...
+    def discard_agent_channels(self, agent_id: str, channel_ids: Iterable[str]) -> None: ...
 
 
 class ChannelManager:

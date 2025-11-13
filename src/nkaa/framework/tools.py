@@ -7,8 +7,8 @@ from typing import Any, Sequence
 from nkaa.framework.agent import BaseTools
 from nkaa.framework.channels.manager import ChannelManager
 from nkaa.framework.channels.models import ChannelMessage, ChannelMetadata, ChannelSearchQuery, UnreadRecord
-from nkaa.framework.messages import StopMessage
 from nkaa.framework.message_manager import MessageManager
+from nkaa.framework.messages import StopMessage
 
 
 @dataclass

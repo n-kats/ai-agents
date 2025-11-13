@@ -2,9 +2,9 @@
 
 from __future__ import annotations
 
+import time
 from abc import ABC, abstractmethod
 from collections import defaultdict
-import time
 from threading import Condition
 from typing import Iterable, Protocol, Sequence
 
@@ -312,11 +312,7 @@ class MessageManager:
             remaining = None if deadline is None else deadline - time.monotonic()
             if remaining is not None and remaining <= 0:
                 return None
-            wait_time = (
-                self._poll_interval
-                if remaining is None
-                else max(0.0, min(self._poll_interval, remaining))
-            )
+            wait_time = self._poll_interval if remaining is None else max(0.0, min(self._poll_interval, remaining))
             with condition:
                 condition.wait(timeout=wait_time)
             pointer = self._queue_backend.dequeue_for_agent(agent_id, allowed_channels=allowed)

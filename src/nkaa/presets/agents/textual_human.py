@@ -716,19 +716,9 @@ if App is not None:
             if self._log_stream is None:
                 return
             records = self._log_stream.snapshot()
-            agent_ids = sorted(
-                {
-                    record.context.get("agent_id")
-                    for record in records
-                    if record.context.get("agent_id")
-                }
-            )
+            agent_ids = sorted({record.context.get("agent_id") for record in records if record.context.get("agent_id")})
             channel_ids = sorted(
-                {
-                    record.context.get("channel_id")
-                    for record in records
-                    if record.context.get("channel_id")
-                }
+                {record.context.get("channel_id") for record in records if record.context.get("channel_id")}
             )
             agent_options: list[tuple[str, str]] = [("すべてのエージェント", "__all__")]
             agent_options.extend((agent, agent) for agent in agent_ids)

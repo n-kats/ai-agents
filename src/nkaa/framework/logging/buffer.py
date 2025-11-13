@@ -9,7 +9,6 @@ from typing import Any, Callable, Deque, Dict, Iterable, Literal
 
 from loguru import logger
 
-
 __all__ = [
     "LogRecord",
     "LogRecordEvent",

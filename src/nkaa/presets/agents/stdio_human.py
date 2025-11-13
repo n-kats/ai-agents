@@ -89,9 +89,7 @@ class StdIOHumanAgent(BaseAgent[StdIOHumanAgentTools]):
         self.message_field = message_field
         self.request_id_key = request_id_key
         self._request_index = 1
-        self._history: StdIOHumanHistory | None = (
-            StdIOHumanHistory(history_path) if history_path is not None else None
-        )
+        self._history: StdIOHumanHistory | None = StdIOHumanHistory(history_path) if history_path is not None else None
         self._stop_requested = False
         self._current_send_channels: list[str] = []
 
@@ -413,6 +411,7 @@ class StdIOHumanAgent(BaseAgent[StdIOHumanAgentTools]):
                 replied_message=message,
             )
             return
+
 
 class StdIOHumanAgentConfig(AgentConfig):
     type: Literal["stdio_human"] = "stdio_human"

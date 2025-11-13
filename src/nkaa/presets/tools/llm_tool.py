@@ -8,13 +8,12 @@ from typing import Any, Iterable, Literal, Sequence, TypeVar
 from weakref import WeakKeyDictionary
 
 from loguru import logger
+from openai import AsyncOpenAI, OpenAI
 from opik import Opik
 from opik.integrations.openai import track_openai
-from openai import AsyncOpenAI, OpenAI
 from pydantic import BaseModel, ConfigDict, Field
 
 from nkaa.framework.agent import BaseTools
-
 
 ParsedModelT = TypeVar("ParsedModelT", bound=BaseModel)
 
@@ -87,9 +86,7 @@ class LLMCallTool(BaseTools):
         **params: Any,
     ) -> tuple[dict[str, Any], bool]:
         if response_format is not None and text_format is not None:
-            raise ValueError(
-                "response_format と text_format は同時に指定できません。"
-            )
+            raise ValueError("response_format と text_format は同時に指定できません。")
 
         model = self._normalize_model(model_name)
         payload: dict[str, Any] = {
@@ -438,8 +435,7 @@ class LLMCallTool(BaseTools):
             if maybe:
                 collected_parts.append(maybe)
 
-        aggregated = "\n".join(part.strip()
-                               for part in collected_parts if part)
+        aggregated = "\n".join(part.strip() for part in collected_parts if part)
         if aggregated.strip():
             return aggregated.strip()
 
@@ -460,8 +456,7 @@ class LLMCallTool(BaseTools):
             logger.debug(label)
             return
         try:
-            serialized = json.dumps(
-                payload, ensure_ascii=False, default=lambda obj: repr(obj))
+            serialized = json.dumps(payload, ensure_ascii=False, default=lambda obj: repr(obj))
         except TypeError:  # pragma: no cover - デバッグ用途
             serialized = repr(payload)
         logger.debug("{} {}", label, serialized)
@@ -485,9 +480,7 @@ class LLMCallTool(BaseTools):
 
         api_key = self.api_key or os.getenv("OPENAI_API_KEY")
         if not api_key:
-            raise RuntimeError(
-                "OPENAI_API_KEY が設定されていません。OpenAI の API キーを環境変数に設定してください。"
-            )
+            raise RuntimeError("OPENAI_API_KEY が設定されていません。OpenAI の API キーを環境変数に設定してください。")
         client = AsyncOpenAI(api_key=api_key, **self.client_options)
         client = self._configure_opik_tracking(client)
         # 各エージェントはスレッドごとに独立したイベントループを持つため、

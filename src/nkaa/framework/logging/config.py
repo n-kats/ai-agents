@@ -14,7 +14,6 @@ from .buffer import (
     reset_buffer_sink_attachment,
 )
 
-
 __all__ = [
     "LoggingState",
     "configure_logging",
