@@ -3,7 +3,7 @@
 このドキュメントは本リポジトリの主要ディレクトリと役割をまとめています。構成を更新した場合は、本ファイルもあわせて改訂してください。
 
 ## ルート直下
-- `src/nkaa/` : フレームワーク本体。基盤コード、プリセット、旧研究用実装を含みます。
+- `src/nkaa/` : フレームワーク本体。基盤コードおよびプリセットを含みます。
 - `docs/` : 現行アーキテクチャや運用方針をまとめたドキュメント。
 - `docs/legacy/` : 過去の Research Agent 系資料や振り返りログ。参照のみ。
 - `docs/meta_plan/` : 再利用可能なテンプレートや横断的な計画メモを格納（個別ガイドライン本文は `docs/guides/` へ移動）。
@@ -15,6 +15,7 @@
 - `docs/usage/` : `make lint` などのコマンドリファレンス。
 - `docker/` : Docker Compose など環境構築用ファイル（PostgreSQL チャンネル基盤を追加予定）。
 - `samples/` : フレームワークを体験するための最小サンプルコードと手順。
+- `legacy/` : アーカイブ済みの Research Agent 用ソースツリー（`legacy/src/nkaa/legacy/` 以下に配置）。
 - `Makefile`, `pyproject.toml`, `uv.lock` : ビルドと依存管理設定。
 - `_cache/`, `_output/`, `_data/` : 実行時生成物やキャッシュ（必要に応じて作成）。
 - `_tmp/` : 一時ファイル群。Codex 用の仮想環境 `_tmp/codex_venv` もここに配置する。
@@ -26,7 +27,7 @@
   - `agents/` : 汎用的なエージェント実装（例: 標準入出力ベースの人間エージェント）。
   - `managers/` : プリセットマネージャ（例: `single_agent_model.py`）。
   - `tools/` : プリセットで利用するツールのダミー実装。
-- `legacy/` : 旧研究用実装 (`legacy/research_agent_v1/`, `legacy/research_agent_v2/`) を格納。設計メモは `docs/legacy/` を参照。
+- （旧）`legacy/` : 旧研究用実装は `legacy/src/nkaa/legacy/research_agent_v1/`・`legacy/src/nkaa/legacy/research_agent_v2/` に移動済み。設計メモは `docs/legacy/` を参照。
 
 ## `docs/` 配下
 - `concept.md` : 現行コンセプトと設計概要。

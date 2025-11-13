@@ -118,5 +118,5 @@
 - [x] ライブラリ構造図（`docs/library_structure.md`）
 
 ## レガシー資産
-- [x] `legacy/research_agent_v1/`・`legacy/research_agent_v2/` を参照専用としてアーカイブ
+- [x] `legacy/src/nkaa/legacy/research_agent_v1/`・`legacy/src/nkaa/legacy/research_agent_v2/` を参照専用としてアーカイブ
 - [ ] `docs/legacy/` の要点を現行ドキュメントへ移譲

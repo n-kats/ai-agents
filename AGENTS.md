@@ -25,7 +25,7 @@
 
 3. 完了後
    - `docs/implementation_status.md` の該当項目を更新し、完了／保留／フォローアップの状態と参照リンクを記録する。
-   - ユーザーから文脈なく「続けて」と指示された場合は `docs/guides/shortcut_continue.md` を参照し、再開時に確認すべき資料の順番を示す。
+   - ユーザーから文脈なく「続けて」と指示された場合は `docs/guides/shortcut_continue.md` を参照し、必要な資料を確認したうえで次に取るべきステップ案を提案する。
 
 ## ワークフロー
 - **ExecPlan ワークフロー**  
@@ -40,7 +40,7 @@
 ## プロジェクト構造とモジュール
 - コアフレームワークは `src/nkaa/framework/` に集約され、エージェントおよびチャネル抽象を提供する。
 - プリセットとアダプターは `src/nkaa/presets/` に配置し、新規エージェントやツールの統合を容易にする。
-- レガシー試作は `src/nkaa/legacy/research_agent_v1/` と `src/nkaa/legacy/research_agent_v2/` に保管し、参照のみで改変しない。
+- レガシー試作は `legacy/src/nkaa/legacy/research_agent_v1/` と `legacy/src/nkaa/legacy/research_agent_v2/` に保管し、参照のみで改変しない。
 - 設計メモやチェックリストは `docs/concept.md` と `docs/implementation_status.md` を確認する。
 - ルート直下の `pyproject.toml`、`Makefile`、`config.yaml` が開発設定を管理する。
 

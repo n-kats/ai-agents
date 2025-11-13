@@ -1,23 +1,33 @@
 # 続けて対応時に即参照すべき資料
 
-このメモは、ユーザーから「続けて」と指示された際に必要な情報へ素早く辿り着くためのショートカットです。主にチャンネル検索フローの継続作業で確認した内容をまとめています。
+このメモは、ユーザーから「続けて」と指示された際に、エージェントが自力で文脈を再構築し次アクションを提示するためのショートカットです。ユーザーへ確認を促すのではなく、`docs/implementation_status.md` を起点に状況を把握し、根拠付きで提案します。
 
-## 1. 全体構造と進捗の確認
-- [docs/directory_structure.md](../directory_structure.md) : どのディレクトリに関連資料があるかを把握するために最初に確認。
-- [docs/implementation_status.md](../implementation_status.md) : チャンネル検索／参加周りのチェック項目が更新されているので、未完タスクの把握に必須。
+## 0. 運用方針
+- 文脈が不明でも `AGENTS.md` の指針に従い、`docs/implementation_status.md` の記述のみを現状ソースとして読み解いてから回答する。
+- 最新差分や `git status`/`git log` など、履歴・差分ベースの調査は行わない。
+- ユーザーに「何をやるのか」を再確認しない。必要な手掛かりは `docs/implementation_status.md` の中で完結させる。
+- 回答時は (1) 把握した状態の要約、 (2) 未完タスクやリスク、 (3) 次に取るべき具体的な手順案（最低2案が望ましい）を示す。
 
-## 2. チャンネル仕様と既存決定事項
-- [docs/specs/channel_spec.md](../specs/channel_spec.md) : `ChannelManager.search_channels` や `ChannelTools.join_matching` の振る舞い、および残課題（アクセス制御や検索条件拡張など）の整理を確認。
+## 1. 実装状況の確認
+- [docs/implementation_status.md](../implementation_status.md) をセクション単位で読み、現在の進行状況・保留事項・フォローアップ指示を把握する。
+- 記載された参照リンク（仕様書・ノート・コードパス）がある場合のみ辿り、そこから追加情報を得る。
+
+## 2. 仕様と決定事項
+- `docs/implementation_status.md` 内のリンクを起点に、必要な仕様書（例: [docs/specs/channel_spec.md](../specs/channel_spec.md)）や関連ノートを確認し、決定事項を整理する。
+- 追加の資料を読む際も、必ずステータスで言及されているものだけを参照する。
 
 ## 3. コア実装の読みどころ
-- `src/nkaa/framework/channels/manager.py` : `search_channels` を含むマネージャの中核ロジック。未読キュー復元やメンバーシップ管理の流れもここで把握。
-- `src/nkaa/framework/channels/models.py` : `ChannelSearchQuery` のフィルタ条件定義。どのメタデータ項目が検索条件になるかの参照用。
-- `src/nkaa/framework/channels/repository.py` : InMemory/SQL 実装が `search` と連携するために必要な永続層の仕組みを確認。
-- `src/nkaa/framework/tools.py` : `ChannelTools.search` と `join_matching` のエージェント向け API。検索結果と参加処理の利用例を把握。
+- コードを確認する場合は、`docs/implementation_status.md` が参照するモジュール・関数のみを対象とする。
+- 例: `src/nkaa/framework/channels/manager.py` の特定メソッドや `src/nkaa/framework/channels/models.py` の定義など、ステータスに記載の箇所を優先的に追う。
 
 ## 4. テストの参照ポイント
-- `tests/framework/test_channels.py` : チャンネル検索・自動参加のテストケース `test_channel_search_and_auto_join` を確認し、期待挙動を具体例で把握。
+- `docs/implementation_status.md` が指すテストファイル（例: `tests/framework/test_channels.py`）を確認し、期待挙動や不足テストを把握する。
+
+## 5. 応答の組み立て
+- 1〜4 で得た情報のみをもとに、現状の要約とリスクを箇条書きで整理する。
+- 直近で着手すべきタスクを優先度順に 2〜3 個提案し、それぞれ根拠（参照ファイル・行や仕様）を添える。
+- 追加で必要な資料が判明した場合は参照箇所を明示し、自身で確認する前提でスケジュール案を述べる。
 
 ## 使い方メモ
-- 作業を再開する際は 1 → 4 の順で目を通すと、全体状況 → 仕様 → 実装 → テストの流れを最短で復習できる。
-- 新しい検索条件やフローを追加する場合は、上記ファイルに加えてドキュメントの更新箇所を [docs/specs/channel_spec.md](../specs/channel_spec.md) → [docs/implementation_status.md](../implementation_status.md) の順に検討する。
+- 作業を再開する際は 0 → 5 の順で進めると、方針確認 → 実装状況 → 仕様 → 実装 → テスト → 応答組み立ての流れを最短で辿れる。
+- 新しい検索条件やフローを追加する場合も、最初に [docs/implementation_status.md](../implementation_status.md) を確認し、そこで示されたリンクを辿ってタスクを決める。
